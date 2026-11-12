@@ -51,9 +51,13 @@ android {
     // One APK per CPU type instead of one carrying every ABI's native libraries: OpenCV and the OCR engine
     // are ~36 MB of .so per ABI, and a phone only ever uses one set. Play builds from the bundle anyway.
     // x86_64 (emulators) only on request: ./gradlew ... -Pdeckle.emulator=true
+    // Per-ABI APKs keep sideloaded/debug installs small. App bundles can't be built with them (AGP issue
+    // 402800800) and don't need them: Play delivers per-ABI splits from the bundle itself.
+    val bundling = gradle.startParameter.taskNames.any { it.contains("bundle", ignoreCase = true) }
+    if (bundling) defaultConfig.ndk.abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
     splits {
         abi {
-            isEnable = true
+            isEnable = !bundling
             reset()
             include("arm64-v8a", "armeabi-v7a")
             if (providers.gradleProperty("deckle.emulator").orNull == "true") include("x86_64")

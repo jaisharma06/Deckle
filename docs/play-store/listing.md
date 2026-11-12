@@ -163,7 +163,7 @@ Done. The policy is served by GitHub Pages from the `gh-pages` branch:
 
 1. **Create an upload key**, once, and keep it backed up safely:
    `keytool -genkeypair -v -keystore upload.jks -alias deckle -keyalg RSA -keysize 4096 -validity 10000`
-2. **Build the bundle:** set the `DECKLE_KEYSTORE_*` environment variables (see README), then run `./gradlew bundleRelease`. The output is `app/build/outputs/bundle/release/app-release.aab`.
+2. **Build the bundle:** `powershell -ExecutionPolicy Bypass -File tools/release/build-bundle.ps1`. It asks for the keystore password and prints the path of the signed `app-release.aab`.
 3. **Play App Signing:** accept the default. Google holds the app signing key and you keep the upload key.
 4. **Closed testing first.** New *personal* developer accounts must run a closed test with **at least 12 testers opted in for 14 continuous days** before production access is granted. Friends and family with Android phones work; add their Gmail addresses to a tester list.
 5. **Production:** after the test period, apply for production access in the Console, then roll out, starting at 20% if you like.

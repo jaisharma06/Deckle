@@ -84,6 +84,8 @@ The APKs are split per ABI (arm64-v8a, armeabi-v7a), because OpenCV's native lib
 
 Release builds read the upload key from environment variables. Nothing secret is committed.
 
+On Windows, `tools/release/build-bundle.ps1` asks for the password and does all of this for you.
+
 ```bash
 export DECKLE_KEYSTORE_PATH=/path/to/upload.jks
 export DECKLE_KEYSTORE_PASSWORD=...  DECKLE_KEY_ALIAS=...  DECKLE_KEY_PASSWORD=...
