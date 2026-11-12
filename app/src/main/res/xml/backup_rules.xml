@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Backup is disabled; these rules ensure a future change of mind can never silently include scans. -->
+<full-backup-content>
+    <exclude domain="file" path="docs/" />
+    <exclude domain="file" path="staging/" />
+    <exclude domain="database" path="." />
+</full-backup-content>

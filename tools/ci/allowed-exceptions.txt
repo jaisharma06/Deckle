@@ -1,0 +1,10 @@
+# Exact "group:artifact" entries that match forbidden.txt but are reviewed and accepted.
+# All are transitive dependencies of com.google.mlkit:text-recognition (the BUNDLED recogniser):
+# the model and native pipeline ship inside the APK; these provide ML Kit's API surface and
+# component wiring. ML Kit's datatransport logger cannot send anything: the app has no INTERNET.
+com.google.android.gms:play-services-mlkit-text-recognition
+com.google.android.gms:play-services-mlkit-text-recognition-common
+com.google.firebase:firebase-annotations
+com.google.firebase:firebase-components
+com.google.firebase:firebase-encoders
+com.google.firebase:firebase-encoders-json

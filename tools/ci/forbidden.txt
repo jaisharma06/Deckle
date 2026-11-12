@@ -1,0 +1,11 @@
+# Regex prefixes matched against "group:artifact" of the release runtime classpath.
+com\.google\.firebase:
+com\.google\.android\.gms:play-services-mlkit
+com\.google\.android\.gms:play-services-ads
+com\.squareup\.okhttp3:
+com\.squareup\.retrofit2:
+io\.coil-kt\.coil3:coil-network
+com\.itextpdf:
+.*:tess-two
+.*:oss-licenses
+com\.google\.mlkit:text-recognition-devanagari

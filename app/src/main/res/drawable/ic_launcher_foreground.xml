@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Deckle: a page with a torn (deckle) bottom edge, mid-scan. Generated from tools/icon/icon.py; edit there. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M40.0,30.0 L61.0,30.0 L71.0,40.0 L71.0,77.6 Q67.7,80.3 64.4,79.4 Q61.0,76.6 57.6,77.4 Q54.1,80.3 50.6,79.6 Q47.2,76.8 43.8,77.6 Q40.4,80.1 37,79.0 L37.0,33.0 Q37.0,30.0 40.0,30.0 Z" />
+    <path
+        android:fillColor="#BFE0DA"
+        android:pathData="M61.0,30.0 L61.0,38.0 Q61.0,40.0 63.0,40.0 L71.0,40.0 Z" />
+    <path
+        android:strokeColor="#0B6E64"
+        android:strokeWidth="3.6"
+        android:strokeLineCap="round"
+        android:pathData="M43,39 L56,39" />
+    <path
+        android:strokeColor="#0B6E64"
+        android:strokeWidth="3.6"
+        android:strokeLineCap="round"
+        android:pathData="M43,47 L64,47" />
+    <path
+        android:strokeColor="#A9D2CB"
+        android:strokeWidth="3.6"
+        android:strokeLineCap="round"
+        android:pathData="M43,66 L61,66" />
+    <path
+        android:fillColor="#FF7A3D"
+        android:pathData="M33.5,53.5 L74.5,53.5 Q77.0,53.5 77.0,56.0 L77.0,56.0 Q77.0,58.5 74.5,58.5 L33.5,58.5 Q31.0,58.5 31.0,56.0 L31.0,56.0 Q31.0,53.5 33.5,53.5 Z" />
+</vector>

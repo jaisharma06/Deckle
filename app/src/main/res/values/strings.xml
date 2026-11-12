@@ -1,0 +1,363 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Deckle</string>
+
+    <!-- Common -->
+    <string name="action_undo">Undo</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_done">Done</string>
+    <string name="action_next">Next</string>
+    <string name="action_back">Back</string>
+    <string name="action_close">Close</string>
+    <string name="action_delete">Delete</string>
+    <string name="action_discard">Discard</string>
+    <string name="action_retry">Try again</string>
+    <string name="action_open_settings">Open settings</string>
+    <string name="action_more">More options</string>
+    <string name="action_reset">Reset</string>
+    <string name="action_restore">Restore</string>
+    <string name="action_got_it">Got it</string>
+
+    <!-- Errors (spec 05 §9: plain words, a next step, no codes) -->
+    <string name="error_storage_full">Couldn\'t save — your storage is full. Free up some space and try again.</string>
+    <string name="error_image">Couldn\'t read that image. Try taking the photo again.</string>
+    <string name="error_generic">Something went wrong. Please try again.</string>
+    <string name="error_original_not_saved">The original photo wasn\'t kept, so this page can\'t be re-cropped. Turn on Save originals in Settings for future scans.</string>
+    <string name="error_export">Couldn\'t export. Please try again.</string>
+    <string name="error_ocr">Couldn\'t read text on this page</string>
+    <string name="error_not_found">That document no longer exists.</string>
+
+    <!-- Library -->
+    <string name="library_search_hint">Search documents and text</string>
+    <string name="library_clear_search">Clear search</string>
+    <string name="library_sort_created">Date created</string>
+    <string name="library_sort_modified">Date modified</string>
+    <string name="library_sort_title">Title</string>
+    <string name="library_sort_label">Sort by %1$s</string>
+    <string name="library_scan">Scan</string>
+    <string name="library_scan_first">Scan your first document</string>
+    <string name="library_empty_title">Paper in, searchable PDFs out</string>
+    <string name="library_empty_body">Scan pages, find any word in them, and export clean PDFs — all on your phone.</string>
+    <string name="library_no_results">Nothing matches “%1$s”</string>
+    <string name="library_no_results_body">Try a different word. Search looks through titles and the text inside your scans.</string>
+    <string name="library_menu_trash">Recently deleted</string>
+    <string name="library_menu_settings">Settings</string>
+    <plurals name="library_selected">
+        <item quantity="one">%d selected</item>
+        <item quantity="other">%d selected</item>
+    </plurals>
+    <string name="library_merge">Merge</string>
+    <string name="library_export">Export</string>
+    <plurals name="library_moved_to_trash">
+        <item quantity="one">Moved to Recently deleted</item>
+        <item quantity="other">%d documents moved to Recently deleted</item>
+    </plurals>
+    <plurals name="library_merge_title">
+        <item quantity="one">Combine %d document into one?</item>
+        <item quantity="other">Combine %d documents into one?</item>
+    </plurals>
+    <string name="library_merge_body">Pages are joined in the order you selected them.</string>
+    <plurals name="library_resume">
+        <item quantity="one">Continue scanning · %d page</item>
+        <item quantity="other">Continue scanning · %d pages</item>
+    </plurals>
+    <string name="library_resume_discard">Discard unfinished scan</string>
+    <plurals name="page_count">
+        <item quantity="one">%d page</item>
+        <item quantity="other">%d pages</item>
+    </plurals>
+    <string name="date_today">Today, %1$s</string>
+    <string name="date_yesterday">Yesterday, %1$s</string>
+    <string name="cd_document_cover">Cover of %1$s</string>
+    <string name="cd_selected">Selected</string>
+
+    <!-- Capture -->
+    <string name="capture_close">Close camera</string>
+    <string name="capture_shutter">Capture page</string>
+    <string name="capture_flash_off">Flash off</string>
+    <string name="capture_flash_on">Flash on</string>
+    <string name="capture_flash_auto">Flash auto</string>
+    <string name="capture_auto">Auto</string>
+    <string name="capture_auto_on">Auto-capture on</string>
+    <string name="capture_auto_off">Auto-capture off</string>
+    <string name="capture_mode_single">Single</string>
+    <string name="capture_mode_batch">Batch</string>
+    <string name="capture_import">Import from photos</string>
+    <string name="capture_review">Review scanned pages</string>
+    <string name="capture_hint_looking">Looking for a page…</string>
+    <string name="capture_hint_tip">Move a little closer, or try a contrasting surface</string>
+    <string name="capture_hint_hold">Hold steady</string>
+    <string name="capture_hint_capturing">Capturing…</string>
+    <string name="capture_hint_ready">Ready</string>
+    <string name="capture_hint_batch">Batch mode · take as many pages as you like</string>
+    <string name="capture_hint_no_detector">Auto-detect is off on this device — crop manually after capture</string>
+    <string name="capture_page_detected">Page detected</string>
+    <plurals name="capture_discard_title">
+        <item quantity="one">Discard %d scan?</item>
+        <item quantity="other">Discard %d scans?</item>
+    </plurals>
+    <string name="capture_keep_scanning">Keep scanning</string>
+    <string name="capture_tip_detect">Hold your phone over a page — edges are found automatically.</string>
+    <string name="capture_tip_batch">Batch: shoot several pages in a row, then review them together.</string>
+    <string name="capture_zoom">%1$.1f×</string>
+
+    <!-- Permission -->
+    <string name="permission_title">Camera access</string>
+    <string name="permission_body">Deckle needs the camera to scan pages. Photos stay on your phone.</string>
+    <string name="permission_allow">Allow camera</string>
+    <string name="permission_denied_body">Camera access is turned off. You can turn it on in Settings.</string>
+
+    <!-- Crop -->
+    <string name="crop_title">Adjust corners</string>
+    <string name="crop_retake">Retake</string>
+    <string name="crop_rotate_left">Rotate left</string>
+    <string name="crop_rotate_right">Rotate right</string>
+    <string name="crop_full_page">Full page</string>
+    <string name="crop_auto">Auto</string>
+    <string name="crop_not_found">Edges not found — adjust the corners or use the full page</string>
+    <string name="crop_corner_tl">Top-left corner</string>
+    <string name="crop_corner_tr">Top-right corner</string>
+    <string name="crop_corner_br">Bottom-right corner</string>
+    <string name="crop_corner_bl">Bottom-left corner</string>
+    <string name="crop_move_up">Move up</string>
+    <string name="crop_move_down">Move down</string>
+    <string name="crop_move_left">Move left</string>
+    <string name="crop_move_right">Move right</string>
+    <string name="crop_use_full_page">Use full page</string>
+    <string name="crop_auto_detect">Auto-detect edges</string>
+    <string name="crop_save">Save crop</string>
+
+    <!-- Review -->
+    <string name="review_page_of">Page %1$d of %2$d</string>
+    <string name="filter_original">Original</string>
+    <string name="filter_colour">Colour</string>
+    <string name="filter_greyscale">Greyscale</string>
+    <string name="filter_bw">B&amp;W</string>
+    <string name="filter_magic">Magic</string>
+    <string name="filter_lighten">Lighten</string>
+    <string name="filter_photo">Photo</string>
+    <string name="filter_eco">Ink saver</string>
+    <string name="filter_vivid">Vivid</string>
+    <string name="filter_warm">Warm</string>
+    <string name="filter_cool">Cool</string>
+    <string name="filter_sepia">Sepia</string>
+    <string name="filter_vintage">Vintage</string>
+    <string name="filter_matte">Matte</string>
+    <string name="filter_noir">Noir</string>
+    <string name="filter_sketch">Sketch</string>
+    <string name="filter_blueprint">Blueprint</string>
+    <string name="filter_negative">Negative</string>
+    <string name="review_apply_all">Apply to all pages</string>
+    <string name="review_crop">Crop</string>
+    <string name="review_rotate">Rotate</string>
+    <string name="review_adjust">Adjust</string>
+    <string name="review_add_page">Add page</string>
+    <string name="review_delete_page">Delete page</string>
+    <string name="review_page_deleted">Page deleted</string>
+    <plurals name="review_finishing">
+        <item quantity="one">Finishing %d…</item>
+        <item quantity="other">Finishing %d…</item>
+    </plurals>
+    <string name="review_failed">This page couldn\'t be processed</string>
+    <string name="adjust_brightness">Brightness</string>
+    <string name="adjust_contrast">Contrast</string>
+
+    <!-- Document -->
+    <string name="document_edited">Edited %1$s</string>
+    <string name="document_rename">Rename</string>
+    <string name="document_title_field">Document title</string>
+    <string name="document_add">Add</string>
+    <string name="document_copy_text">Copy text</string>
+    <string name="document_share">Share</string>
+    <string name="document_export_pdf">Export PDF</string>
+    <string name="document_text_copied">Text copied</string>
+    <plurals name="document_text_copied_pending">
+        <item quantity="one">Text copied · %d page is still being read</item>
+        <item quantity="other">Text copied · %d pages are still being read</item>
+    </plurals>
+    <string name="document_no_text">No text found yet</string>
+    <string name="document_select_pages">Select pages</string>
+    <string name="document_set_cover">Set as cover</string>
+    <string name="document_delete">Delete document</string>
+    <string name="document_insert_after">Insert page after</string>
+    <string name="ocr_queued">Waiting to read text</string>
+    <string name="ocr_running">Reading text</string>
+    <string name="ocr_done">Text ready</string>
+    <string name="ocr_failed">Couldn\'t read text</string>
+    <string name="cd_page_number">Page %1$d</string>
+    <string name="action_move_earlier">Move earlier</string>
+    <string name="action_move_later">Move later</string>
+
+    <!-- Viewer -->
+    <string name="viewer_position">%1$d / %2$d</string>
+    <string name="viewer_filter">Filter</string>
+    <string name="viewer_insert">Insert</string>
+
+    <!-- Export -->
+    <string name="export_title">Export</string>
+    <string name="export_format">Format</string>
+    <string name="export_pages">Pages</string>
+    <string name="export_pages_all">All (%1$d)</string>
+    <string name="export_pages_selected">Selected (%1$d)</string>
+    <string name="export_page_size">Page size</string>
+    <string name="export_size_auto">Auto</string>
+    <string name="export_size_a4">A4</string>
+    <string name="export_size_letter">Letter</string>
+    <string name="export_quality">Quality</string>
+    <string name="export_quality_small">Small</string>
+    <string name="export_quality_medium">Medium</string>
+    <string name="export_quality_original">Original</string>
+    <string name="export_estimate">≈ %1$s</string>
+    <string name="export_password">Password protect</string>
+    <string name="export_password_field">Password</string>
+    <string name="export_password_confirm">Confirm password</string>
+    <string name="export_password_mismatch">Passwords don\'t match</string>
+    <string name="export_password_short">Use at least 4 characters</string>
+    <string name="export_show_password">Show password</string>
+    <string name="export_hide_password">Hide password</string>
+    <string name="export_save">Save to device</string>
+    <string name="export_share">Share</string>
+    <string name="export_progress">Page %1$d of %2$d</string>
+    <string name="export_done">Exported</string>
+    <string name="export_saved">Saved</string>
+    <string name="export_notification_rationale">Allow notifications to see export progress</string>
+
+    <!-- Trash -->
+    <string name="trash_title">Recently deleted</string>
+    <string name="trash_empty_title">Nothing here</string>
+    <string name="trash_empty_body">Deleted documents stay here for 30 days.</string>
+    <plurals name="trash_days_left">
+        <item quantity="one">Deletes in %d day</item>
+        <item quantity="other">Deletes in %d days</item>
+    </plurals>
+    <string name="trash_delete_forever">Delete forever</string>
+    <string name="trash_empty_action">Empty</string>
+    <string name="trash_delete_forever_title">Delete forever?</string>
+    <string name="trash_delete_forever_body">This can\'t be undone.</string>
+    <string name="trash_restored">Restored</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_group_scanning">Scanning</string>
+    <string name="settings_default_filter">Default filter</string>
+    <string name="settings_auto_capture">Auto-capture</string>
+    <string name="settings_auto_capture_desc">Take the photo when the page is held steady</string>
+    <string name="settings_flash">Default flash</string>
+    <string name="settings_save_originals">Save originals</string>
+    <string name="settings_save_originals_desc">Needed to re-crop pages later</string>
+    <string name="settings_group_text">Text recognition</string>
+    <string name="settings_ocr_language">Reads English and other Latin-script languages</string>
+    <string name="settings_group_export">Export</string>
+    <string name="settings_default_quality">Default quality</string>
+    <string name="settings_default_page_size">Default page size</string>
+    <string name="settings_group_privacy">Privacy</string>
+    <string name="settings_secure">Hide scans from screenshots and recent apps</string>
+    <string name="settings_group_storage">Storage</string>
+    <string name="settings_storage_usage">Documents %1$s · Cache %2$s</string>
+    <string name="settings_clear_cache">Clear cache</string>
+    <string name="settings_clear_cache_desc">Removes temporary files. Your scans are never touched.</string>
+    <string name="settings_cache_cleared">Cache cleared</string>
+    <string name="settings_about">About Deckle</string>
+
+    <!-- About -->
+    <string name="about_headline">Your scans stay on this phone.</string>
+    <string name="about_body">Deckle has no internet access — it isn\'t even allowed to ask for it. There are no accounts, no analytics and no ads. Nothing you scan ever leaves this device unless you share it yourself.</string>
+    <string name="about_version">Version %1$s</string>
+    <string name="about_licenses">Open-source licences</string>
+    <string name="engine_degraded">Automatic edge detection isn\'t available on this device. You can still crop manually.</string>
+    <!-- Page names, recrop and gallery import -->
+    <string name="action_save">Save</string>
+    <string name="page_rename">Rename page</string>
+    <string name="page_crop">Crop</string>
+    <string name="page_name_hint">Page %1$d</string>
+    <string name="crop_cancel_import">Cancel</string>
+    <string name="library_import">Import from gallery</string>
+
+    <!-- Export history -->
+    <string name="library_menu_history">Export history</string>
+    <string name="history_title">Export history</string>
+    <string name="history_empty_title">No exports yet</string>
+    <string name="history_empty_body">PDFs and images you export or share will be listed here.</string>
+    <string name="history_clear">Clear history</string>
+    <string name="history_clear_body">This only clears the list. Exported files stay where they were saved.</string>
+    <string name="history_share">Share</string>
+    <string name="history_open">Open</string>
+    <string name="history_export_again">Export again</string>
+    <string name="history_remove">Remove from history</string>
+    <string name="history_unavailable">This file is no longer available. Use Export again to make a new copy.</string>
+    <string name="history_no_app">No app on this device can open this file.</string>
+    <string name="history_document_gone">This document has been deleted.</string>
+    <string name="history_dest_share">Shared</string>
+    <string name="history_dest_file">Saved to a file</string>
+    <string name="history_dest_folder">Saved to a folder</string>
+    <string name="history_protected">Password-protected</string>
+    <string name="history_today">Today</string>
+    <string name="history_yesterday">Yesterday</string>
+    <string name="history_earlier">Earlier</string>
+    <plurals name="history_more_documents">
+        <item quantity="one">%1$s and %2$d more</item>
+        <item quantity="other">%1$s and %2$d more</item>
+    </plurals>
+    <!-- Folders and library views -->
+    <string name="library_root">Library</string>
+    <string name="library_view">View</string>
+    <string name="layout_large">Large icons</string>
+    <string name="layout_grid">Medium icons</string>
+    <string name="layout_small">Small icons</string>
+    <string name="layout_list">List</string>
+    <string name="layout_details">Details</string>
+    <string name="library_col_name">Name</string>
+    <string name="library_col_size">Size</string>
+    <string name="library_col_date">Date</string>
+    <string name="library_move">Move to folder</string>
+    <string name="library_rename">Rename</string>
+    <string name="folder_new">New folder</string>
+    <string name="folder_rename">Rename folder</string>
+    <string name="folder_name_hint">Folder name</string>
+    <string name="folder_empty_title">This folder is empty</string>
+    <string name="folder_empty_body">Scan straight into it, or select documents elsewhere and move them here.</string>
+    <string name="folder_empty_items">Empty</string>
+    <string name="folder_export_empty">This folder has no documents to export</string>
+    <string name="folder_move_into_itself">A folder can’t be moved into itself</string>
+    <string name="folder_delete_body">Choose what happens to the documents and folders inside.</string>
+    <string name="folder_delete_keep">Delete folder, keep its contents</string>
+    <string name="folder_delete_keep_body">Everything inside moves up one level.</string>
+    <string name="folder_delete_all">Delete folder and its documents</string>
+    <string name="folder_delete_all_body">Documents go to Recently deleted for 30 days.</string>
+    <string name="move_title">Move to</string>
+    <string name="move_here">Move here</string>
+    <string name="move_no_subfolders">No folders here yet</string>
+    <string name="export_folder_title">Export \"%1$s\"</string>
+    <plurals name="export_folder_body">
+        <item quantity="one">%d document as a PDF, packed in one ZIP file</item>
+        <item quantity="other">%d documents as PDFs, packed in one ZIP file</item>
+    </plurals>
+    <plurals name="folder_delete_title">
+        <item quantity="one">Delete folder?</item>
+        <item quantity="other">Delete %d folders?</item>
+    </plurals>
+    <plurals name="folder_documents">
+        <item quantity="one">%d document</item>
+        <item quantity="other">%d documents</item>
+    </plurals>
+    <plurals name="folder_folders">
+        <item quantity="one">%d folder</item>
+        <item quantity="other">%d folders</item>
+    </plurals>
+    <plurals name="folder_items">
+        <item quantity="one">%d item</item>
+        <item quantity="other">%d items</item>
+    </plurals>
+    <plurals name="library_items_deleted">
+        <item quantity="one">Deleted</item>
+        <item quantity="other">%d items deleted</item>
+    </plurals>
+    <plurals name="library_moved_to">
+        <item quantity="one">Moved to %2$s</item>
+        <item quantity="other">%1$d items moved to %2$s</item>
+    </plurals>
+    <plurals name="library_moved_to_root">
+        <item quantity="one">Moved to Library</item>
+        <item quantity="other">%d items moved to Library</item>
+    </plurals>
+</resources>

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Splash variant of the launcher glyph: ink sheet on paper. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#0B6E64"
+        android:pathData="M40,33 L68,33 L68,72 L65,74 L62,72 L59,74 L56,72 L53,74 L50,72 L47,74 L44,72 L40,74 Z" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FBF9F5"
+        android:strokeWidth="2.4"
+        android:strokeLineCap="round"
+        android:pathData="M45,44 L63,44 M45,50 L63,50 M45,56 L57,56" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#C2571A"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M33,35 L33,28 L40,28 M68,28 L75,28 L75,35 M75,72 L75,79 L68,79 M40,79 L33,79 L33,72" />
+</vector>

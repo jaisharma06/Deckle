@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Export notifications (FR-56). Owned by :data because the worker lives here. -->
+    <string name="notification_channel_export">Exports</string>
+    <string name="notification_export_running">Exporting…</string>
+    <string name="notification_export_done">Export ready</string>
+</resources>
