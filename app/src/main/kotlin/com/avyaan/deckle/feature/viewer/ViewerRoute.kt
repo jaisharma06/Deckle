@@ -64,6 +64,7 @@ import com.avyaan.deckle.designsystem.theme.DeckleMotion
 import com.avyaan.deckle.designsystem.theme.LocalReducedMotion
 import com.avyaan.deckle.designsystem.theme.Spacing
 import com.avyaan.deckle.designsystem.theme.rememberHaptics
+import com.avyaan.deckle.feature.export.ExportSheet
 import com.avyaan.deckle.ui.ObserveEffects
 import com.avyaan.deckle.ui.SecureWindow
 import com.avyaan.deckle.ui.SharedKeys
@@ -86,6 +87,7 @@ fun ViewerRoute(
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     var renaming by rememberSaveable { mutableStateOf(false) }
+    var exporting by rememberSaveable { mutableStateOf(false) }
 
     ObserveEffects(vm.effects) { effect ->
         when (effect) {
@@ -122,6 +124,7 @@ fun ViewerRoute(
                                 if (name != null) Text(position, color = Color.White.copy(alpha = 0.7f), style = MaterialTheme.typography.labelMedium)
                             }
                             IconButton(onClick = { renaming = true }) { Icon(DeckleIcons.Edit, stringResource(R.string.page_rename), tint = Color.White) }
+                            IconButton(onClick = { exporting = true }) { Icon(DeckleIcons.Share, stringResource(R.string.page_export), tint = Color.White) }
                         }
                     }
                     Row(
@@ -166,6 +169,17 @@ fun ViewerRoute(
                 }
             }
         }
+    }
+
+    // Outside CameraTheme: the sheet uses the app's normal colours.
+    val exportPage = state.current
+    if (exporting && exportPage != null) {
+        ExportSheet(
+            documentIds = listOf(vm.documentId),
+            selectedPageIds = listOf(exportPage.id),
+            onDismiss = { exporting = false },
+            onMessage = { scope.launch { snackbar.showSnackbar(it) } },
+        )
     }
 }
 

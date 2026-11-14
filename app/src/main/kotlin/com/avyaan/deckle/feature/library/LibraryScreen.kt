@@ -272,10 +272,20 @@ fun LibraryScreen(
             modifier = Modifier.fillMaxSize().padding(padding),
         ) { empty ->
             if (empty) {
+                // An interrupted first scan must stay reachable even before any document exists.
+                Column(Modifier.fillMaxSize()) {
+                    state.resumableSession?.let { session ->
+                        ResumeBanner(
+                            session,
+                            { onEvent(LibraryEvent.ResumeSession) },
+                            { onEvent(LibraryEvent.DiscardSession) },
+                            Modifier.padding(horizontal = Spacing.l, vertical = Spacing.s),
+                        )
+                    }
                 EmptyState(
                     title = stringResource(R.string.library_empty_title),
                     body = stringResource(R.string.library_empty_body),
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
                     action = {
                         Button(onClick = { haptics.tick(); onEvent(LibraryEvent.ScanClicked) }) {
                             Icon(DeckleIcons.Camera, null)
@@ -284,6 +294,7 @@ fun LibraryScreen(
                         }
                     },
                 )
+                }
             } else {
                 LibraryGrid(state, onEvent, grid, haptics::select, onOpenCrumb, onNewFolder = { newFolder = true })
             }

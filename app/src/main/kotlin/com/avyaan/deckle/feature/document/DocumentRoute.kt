@@ -134,6 +134,8 @@ fun DocumentRoute(
     val scope = rememberCoroutineScope()
     var exportOpen by rememberSaveable { mutableStateOf(false) }
     var exportSelected by rememberSaveable { mutableStateOf(false) }
+    /** Set when one page is exported from its long-press menu. */
+    var exportPage by rememberSaveable { mutableStateOf<String?>(null) }
     var confirmDelete by rememberSaveable { mutableStateOf(false) }
     var failedSheetPage by rememberSaveable { mutableStateOf<String?>(null) }
     var renameShake by remember { mutableStateOf(0) }
@@ -168,7 +170,7 @@ fun DocumentRoute(
                         title = { Text(pluralStringResource(R.plurals.library_selected, state.selection.size, state.selection.size)) },
                         onBack = { vm.onEvent(DocumentEvent.SetSelecting(false)) },
                         actions = {
-                            IconButton(onClick = { exportSelected = true; exportOpen = true }, enabled = state.selection.isNotEmpty()) {
+                            IconButton(onClick = { exportPage = null; exportSelected = true; exportOpen = true }, enabled = state.selection.isNotEmpty()) {
                                 Icon(DeckleIcons.Share, stringResource(R.string.library_export))
                             }
                             IconButton(onClick = { haptics.confirm(); vm.onEvent(DocumentEvent.DeleteSelectedPages) }, enabled = state.selection.isNotEmpty()) {
@@ -191,8 +193,8 @@ fun DocumentRoute(
                 ActionBar(
                     onAdd = { vm.onEvent(DocumentEvent.AddPages) },
                     onCopy = { vm.onEvent(DocumentEvent.CopyText) },
-                    onShare = { exportSelected = false; exportOpen = true },
-                    onExport = { exportSelected = false; exportOpen = true },
+                    onShare = { exportPage = null; exportSelected = false; exportOpen = true },
+                    onExport = { exportPage = null; exportSelected = false; exportOpen = true },
                 )
             }
         },
@@ -211,7 +213,13 @@ fun DocumentRoute(
             if (state.missing && !state.loading) {
                 EmptyState(stringResource(R.string.error_not_found), "", illustration = {}, modifier = Modifier.fillMaxSize())
             } else {
-                PageGrid(state, vm, onFailedTapped = { failedSheetPage = it }, onRename = { renamingPage = it }, onSelectHaptic = haptics::select)
+                PageGrid(
+                    state, vm,
+                    onFailedTapped = { failedSheetPage = it },
+                    onRename = { renamingPage = it },
+                    onExport = { exportPage = it; exportSelected = false; exportOpen = true },
+                    onSelectHaptic = haptics::select,
+                )
             }
         }
     }
@@ -219,7 +227,7 @@ fun DocumentRoute(
     if (exportOpen) {
         ExportSheet(
             documentIds = listOf(vm.documentId),
-            selectedPageIds = if (exportSelected) vm.selectedInOrder() else emptyList(),
+            selectedPageIds = exportPage?.let(::listOf) ?: if (exportSelected) vm.selectedInOrder() else emptyList(),
             onDismiss = { exportOpen = false },
             onMessage = { scope.launch { snackbar.showSnackbar(it) } },
         )
@@ -266,6 +274,7 @@ private fun PageGrid(
     vm: DocumentViewModel,
     onFailedTapped: (String) -> Unit,
     onRename: (String) -> Unit,
+    onExport: (String) -> Unit,
     onSelectHaptic: () -> Unit,
 ) {
     val grid = rememberLazyGridState()
@@ -298,6 +307,7 @@ private fun PageGrid(
                     onSetCover = { vm.onEvent(DocumentEvent.SetCover(page.id)) },
                     onCrop = { vm.onEvent(DocumentEvent.CropPage(page.id)) },
                     onRename = { onRename(page.id) },
+                    onExport = { onExport(page.id) },
                     onFailedTapped = { onFailedTapped(page.id) },
                     modifier = Modifier
                         .graphicsLayer { scaleX = lift; scaleY = lift }
@@ -331,6 +341,7 @@ private fun PageTile(
     onSetCover: () -> Unit,
     onCrop: () -> Unit,
     onRename: () -> Unit,
+    onExport: () -> Unit,
     onFailedTapped: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -365,6 +376,7 @@ private fun PageTile(
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                 DropdownMenuItem(text = { Text(stringResource(R.string.page_crop)) }, leadingIcon = { Icon(DeckleIcons.Crop, null) }, onClick = { menu = false; onCrop() })
                 DropdownMenuItem(text = { Text(stringResource(R.string.page_rename)) }, leadingIcon = { Icon(DeckleIcons.Edit, null) }, onClick = { menu = false; onRename() })
+                DropdownMenuItem(text = { Text(stringResource(R.string.page_export)) }, leadingIcon = { Icon(DeckleIcons.Share, null) }, onClick = { menu = false; onExport() })
                 DropdownMenuItem(text = { Text(stringResource(R.string.document_set_cover)) }, leadingIcon = { Icon(DeckleIcons.Pages, null) }, onClick = { menu = false; onSetCover() }, enabled = !isCover)
             }
         }
@@ -396,6 +408,8 @@ private fun EditableTitle(title: String, shakeKey: Int, onRename: (String) -> Un
     }
     Box(Modifier.offset { androidx.compose.ui.unit.IntOffset((shake.value * 6.dp.toPx()).toInt(), 0) }) {
         if (editing) {
+            // onFocusChanged also reports the initial, unfocused state; only a loss after real focus means "done".
+            var hadFocus by remember { mutableStateOf(false) }
             LaunchedEffect(Unit) { focus.requestFocus() }
             val underline by animateFloatAsState(1f, tween(DeckleMotion.MEDIUM), label = "u")
             val fieldLabel = stringResource(R.string.document_title_field)
@@ -411,7 +425,10 @@ private fun EditableTitle(title: String, shakeKey: Int, onRename: (String) -> Un
                     modifier = Modifier
                         .fillMaxWidth()
                         .focusRequester(focus)
-                        .onFocusChanged { if (!it.isFocused && editing) { onRename(field.text); editing = false } }
+                        .onFocusChanged {
+                            if (it.isFocused) hadFocus = true
+                            else if (hadFocus && editing) { onRename(field.text); editing = false }
+                        }
                         .semantics { contentDescription = fieldLabel },
                 )
                 HorizontalDivider(Modifier.fillMaxWidth(underline), thickness = 2.dp, color = MaterialTheme.colorScheme.primary)

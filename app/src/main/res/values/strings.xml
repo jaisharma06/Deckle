@@ -147,7 +147,7 @@
     <string name="filter_sketch">Sketch</string>
     <string name="filter_blueprint">Blueprint</string>
     <string name="filter_negative">Negative</string>
-    <string name="review_apply_all">Apply to all pages</string>
+    <string name="review_apply_all">Apply to all</string>
     <string name="review_crop">Crop</string>
     <string name="review_rotate">Rotate</string>
     <string name="review_adjust">Adjust</string>
@@ -269,6 +269,7 @@
     <string name="action_save">Save</string>
     <string name="page_rename">Rename page</string>
     <string name="page_crop">Crop</string>
+    <string name="page_export">Export page</string>
     <string name="page_name_hint">Page %1$d</string>
     <string name="crop_cancel_import">Cancel</string>
     <string name="library_import">Import from gallery</string>

@@ -4,6 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.toRoute
+import com.avyaan.deckle.domain.common.ApplicationScope
 import com.avyaan.deckle.domain.common.Outcome
 import com.avyaan.deckle.domain.imaging.Adjustments
 import com.avyaan.deckle.domain.imaging.EnhancementMode
@@ -31,6 +32,7 @@ import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.persistentMapOf
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.collections.immutable.toImmutableMap
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
@@ -115,6 +117,8 @@ class ReviewViewModel @Inject constructor(
     private val files: PageFileStore,
     resumeProcessing: ResumeProcessingUseCase,
     settings: SettingsRepository,
+    /** Deletes must finish even if this screen is already gone. */
+    @ApplicationScope private val appScope: CoroutineScope,
 ) : ViewModel() {
 
     private val route = savedState.toRoute<ReviewDest>()
@@ -199,7 +203,7 @@ class ReviewViewModel @Inject constructor(
                 send(ReviewEffect.PageDeleted(c.id))
             }
             is ReviewEvent.UndoDelete -> ui.update { it.copy(hidden = it.hidden - event.captureId) }
-            is ReviewEvent.ConfirmDelete -> viewModelScope.launch {
+            is ReviewEvent.ConfirmDelete -> appScope.launch {
                 removeCapture(sessionId, event.captureId)
                 ui.update { it.copy(hidden = it.hidden - event.captureId) }
                 if (sessions.get(sessionId)?.captures.isNullOrEmpty()) {
@@ -210,6 +214,15 @@ class ReviewViewModel @Inject constructor(
             ReviewEvent.AddPage -> send(ReviewEffect.OpenCapture(sessionId))
             ReviewEvent.Done -> finish()
         }
+    }
+
+    /**
+     * The Undo snackbar belongs to the screen; leaving it (Back, Add page) cancels the snackbar before it can
+     * confirm. Pages still hidden at that point were deleted by the user, so remove them for real.
+     */
+    override fun onCleared() {
+        val pending = ui.value.hidden
+        if (pending.isNotEmpty()) appScope.launch { pending.forEach { removeCapture(sessionId, it) } }
     }
 
     private fun current(): StagedCapture? {

@@ -5,6 +5,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.toRoute
+import com.avyaan.deckle.domain.common.ApplicationScope
 import com.avyaan.deckle.domain.common.DeckleError
 import com.avyaan.deckle.domain.common.Outcome
 import com.avyaan.deckle.domain.imaging.Adjustments
@@ -28,6 +29,7 @@ import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.persistentMapOf
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.collections.immutable.toImmutableMap
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -96,9 +98,12 @@ class ViewerViewModel @Inject constructor(
     private val enhancer: PageEnhancer,
     private val files: PageFileStore,
     private val renamePage: RenamePageUseCase,
+    /** Deletes must finish even if this screen is already gone. */
+    @ApplicationScope private val appScope: CoroutineScope,
 ) : ViewModel() {
 
     private val route = savedState.toRoute<ViewerDest>()
+    val documentId: String get() = route.documentId
     private val local = MutableStateFlow(Local(currentPageId = savedState[KEY_PAGE] ?: route.pageId))
     private val effectChannel = Channel<ViewerEffect>(Channel.BUFFERED)
     val effects: Flow<ViewerEffect> = effectChannel.receiveAsFlow()
@@ -146,12 +151,21 @@ class ViewerViewModel @Inject constructor(
                 send(ViewerEffect.PageDeleted(p.id))
             }
             is ViewerEvent.UndoDelete -> local.update { it.copy(hidden = it.hidden - event.pageId, currentPageId = event.pageId) }
-            is ViewerEvent.ConfirmDelete -> viewModelScope.launch {
+            is ViewerEvent.ConfirmDelete -> appScope.launch {
                 deletePage(event.pageId)
                 local.update { it.copy(hidden = it.hidden - event.pageId) }
                 if (latestPages.isEmpty()) send(ViewerEffect.Exit)
             }
         }
+    }
+
+    /**
+     * The Undo snackbar belongs to the screen; leaving it (Back, Crop, Insert) cancels the snackbar before it
+     * can confirm. Pages still hidden at that point were deleted by the user, so delete them for real.
+     */
+    override fun onCleared() {
+        val pending = local.value.hidden
+        if (pending.isNotEmpty()) appScope.launch { pending.forEach { deletePage(it) } }
     }
 
     private fun current(): Page? = state.value.current?.id?.let { id -> latestPages.firstOrNull { it.id == id } }

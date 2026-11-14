@@ -9,6 +9,9 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -206,14 +209,14 @@ private fun Controls(state: ReviewUiState, onEvent: (ReviewEvent) -> Unit, onTic
                 contentColor = Color.White,
             )
             Spacer(Modifier.height(Spacing.s))
+            // Equal slots with the label under the icon: fits every font size without wrapping or clipping.
             Row(Modifier.fillMaxWidth().padding(horizontal = Spacing.s), verticalAlignment = Alignment.CenterVertically) {
                 ToolButton(DeckleIcons.Crop, R.string.review_crop) { onEvent(ReviewEvent.Crop) }
                 ToolButton(DeckleIcons.RotateRight, R.string.review_rotate) { onEvent(ReviewEvent.Rotate) }
                 ToolButton(DeckleIcons.Tune, R.string.review_adjust) { onEvent(ReviewEvent.SetAdjustOpen(!state.adjustOpen)) }
-                Spacer(Modifier.weight(1f))
                 if (state.pages.size > 1) {
-                    TextButton(onClick = { onTick(); onEvent(ReviewEvent.ApplyToAll) }) {
-                        Text(stringResource(R.string.review_apply_all), color = CameraColors.Ring)
+                    ToolButton(DeckleIcons.Pages, R.string.review_apply_all, tint = CameraColors.Ring) {
+                        onTick(); onEvent(ReviewEvent.ApplyToAll)
                     }
                 }
             }
@@ -261,10 +264,27 @@ private fun Controls(state: ReviewUiState, onEvent: (ReviewEvent) -> Unit, onTic
 }
 
 @Composable
-private fun ToolButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: Int, onClick: () -> Unit) {
-    TextButton(onClick = onClick) {
-        Icon(icon, null, Modifier.size(20.dp), tint = Color.White)
-        Spacer(Modifier.width(Spacing.xs))
-        Text(stringResource(label), color = Color.White, maxLines = 1, softWrap = false)
+private fun RowScope.ToolButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: Int,
+    tint: Color = Color.White,
+    onClick: () -> Unit,
+) {
+    TextButton(
+        onClick = onClick,
+        contentPadding = PaddingValues(horizontal = 2.dp, vertical = Spacing.xs),
+        modifier = Modifier.weight(1f),
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(icon, null, Modifier.size(22.dp), tint = tint)
+            Text(
+                stringResource(label),
+                color = tint,
+                style = MaterialTheme.typography.labelMedium,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
     }
 }

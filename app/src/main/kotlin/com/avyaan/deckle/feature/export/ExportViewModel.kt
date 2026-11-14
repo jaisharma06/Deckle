@@ -122,9 +122,13 @@ class ExportViewModel @Inject constructor(
     private var archive: ExportArchive? = null
     private var estimateJob: Job? = null
 
-    /** Called when the sheet opens. Safe to call again with the same arguments. */
+    /**
+     * Called when the sheet opens. This ViewModel outlives the sheet (it belongs to the screen underneath), so
+     * a finished export must not carry over: only a sheet reopened on the same pages mid-export keeps its state.
+     */
     fun start(documentIds: List<String>, selectedPageIds: List<String>, archive: ExportArchive? = null) {
-        if (this.documentIds == documentIds && this.selectedPageIds == selectedPageIds && _state.value.ready) return
+        val s = _state.value
+        if (this.documentIds == documentIds && this.selectedPageIds == selectedPageIds && s.ready && !s.done) return
         this.documentIds = documentIds
         this.archive = archive
         this.selectedPageIds = selectedPageIds
