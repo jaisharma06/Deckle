@@ -223,7 +223,7 @@ private fun CaptureScreen(
                     flashOverlay.animateTo(0f, tween(DeckleMotion.SHORT))
                 }
                 val frame = controller.snapshot()?.asImageBitmap()
-                if (vm.state.value.settings.batchMode) {
+                if (vm.state.value.settings.staysInCamera) {
                     if (!reduced && frame != null) scope.launch {
                         flying = frame
                         flight.snapTo(0f)
@@ -339,7 +339,7 @@ private fun CaptureScreen(
                 .padding(bottom = Spacing.l, top = Spacing.s),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            ModeToggle(state.settings.batchMode, { haptics.tick(); vm.onEvent(CaptureEvent.SetBatch(it)) })
+            ModeToggle(state.settings.captureMode, { haptics.tick(); vm.onEvent(CaptureEvent.SetMode(it)) })
             Spacer(Modifier.height(Spacing.m))
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = Spacing.xl),
@@ -362,7 +362,7 @@ private fun CaptureScreen(
                     }
                 }
             }
-            AnimatedVisibility(state.settings.batchMode && state.captureCount > 0) {
+            AnimatedVisibility(state.settings.staysInCamera && state.captureCount > 0 && !state.awaitingCardBack) {
                 TextButton(onClick = { vm.onEvent(CaptureEvent.OpenReview) }) {
                     Text(stringResource(R.string.action_next), color = CameraColors.Ring)
                     Icon(DeckleIcons.Forward, null, tint = CameraColors.Ring)
@@ -468,6 +468,9 @@ private fun CaptureHint.text(): Int = when (this) {
     CaptureHint.READY -> R.string.capture_hint_ready
     CaptureHint.NO_DETECTOR -> R.string.capture_hint_no_detector
     CaptureHint.BATCH -> R.string.capture_hint_batch
+    CaptureHint.CARD_FRONT -> R.string.capture_hint_card_front
+    CaptureHint.CARD_BACK -> R.string.capture_hint_card_back
+    CaptureHint.BOOK -> R.string.capture_hint_book
 }
 
 private fun android.content.Context.hasCameraPermission() =

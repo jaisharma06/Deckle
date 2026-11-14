@@ -24,11 +24,14 @@ public object DetectionTuning {
     /** …every corner within 2 % of frame width across all of them. */
     public const val STABILITY_TOLERANCE: Float = 0.02f
 
-    /** FR-13: fire after the quad has been stable for 1.2 s. */
-    public const val AUTO_CAPTURE_HOLD_MS: Long = 1_200L
+    /**
+     * FR-13: fire after the quad has been stable this long. NV-14 cut it from 1.2 s to 0.8 s: the stability
+     * gate already needs five steady frames (~0.3 s) before holding starts, so 0.8 s is ~1.1 s in total.
+     */
+    public const val AUTO_CAPTURE_HOLD_MS: Long = 800L
 
     /** After an auto-capture, wait this long and for the page to change before arming again (UX addition). */
-    public const val AUTO_CAPTURE_COOLDOWN_MS: Long = 1_500L
+    public const val AUTO_CAPTURE_COOLDOWN_MS: Long = 1_000L   // NV-14: was 1.5 s; the page must still change
 
     /** A corner moving this far (fraction of frame width) means "a new page". */
     public const val NEW_PAGE_MOVEMENT: Float = 0.10f

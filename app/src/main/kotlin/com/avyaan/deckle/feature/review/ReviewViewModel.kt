@@ -58,6 +58,10 @@ data class ReviewPageUi(
     val adjustments: Adjustments,
     /** Quarter turns requested but not yet rendered; the image turns optimistically meanwhile. */
     val pendingTurns: Int,
+    /** NV-10: the last render looks blurry and the user hasn't chosen to keep it. */
+    val blurry: Boolean = false,
+    /** NV-11/12: shown under the page counter for ID card sides and book spreads. */
+    val kind: com.avyaan.deckle.domain.scan.CaptureKind = com.avyaan.deckle.domain.scan.CaptureKind.PAGE,
 )
 
 data class ReviewUiState(
@@ -104,6 +108,10 @@ sealed interface ReviewEvent {
     data object RotateSelected : ReviewEvent
     data class FilterSelected(val mode: EnhancementMode) : ReviewEvent
     data object AddPage : ReviewEvent
+    /** NV-10 banner: keep the current (blurry) page. */
+    data object KeepBlurry : ReviewEvent
+    /** NV-10 banner: drop the current page and go back to the camera. */
+    data object RetakeBlurry : ReviewEvent
     data object Done : ReviewEvent
 }
 
@@ -246,6 +254,16 @@ class ReviewViewModel @Inject constructor(
                 viewModelScope.launch { edit.setModeFor(sessionId, ids.toSet(), event.mode) }
             }
             ReviewEvent.AddPage -> send(ReviewEffect.OpenCapture(sessionId))
+            ReviewEvent.KeepBlurry -> current()?.let { c -> viewModelScope.launch { edit.acceptBlur(sessionId, c.id) } }
+            ReviewEvent.RetakeBlurry -> current()?.let { c ->
+                // No Undo here: the user asked for a new photo of this page. The camera adds it to this scan.
+                ui.update { it.copy(hidden = it.hidden + c.id) }
+                appScope.launch {
+                    removeCapture(sessionId, c.id)
+                    ui.update { it.copy(hidden = it.hidden - c.id) }
+                }
+                send(ReviewEffect.OpenCapture(sessionId))
+            }
             ReviewEvent.Done -> finish()
         }
     }
@@ -362,6 +380,8 @@ class ReviewViewModel @Inject constructor(
             mode = mode,
             adjustments = adjustments,
             pendingTurns = turnsPending,
+            blurry = rendered && looksBlurry,
+            kind = kind,
         )
     }
 

@@ -57,6 +57,8 @@ object ImagingModule {
     @Provides fun detector(selector: EngineSelector): PageDetector = selector.engine.detector()
     @Provides fun corrector(selector: EngineSelector): PerspectiveCorrector = selector.engine.corrector()
     @Provides fun enhancer(selector: EngineSelector): PageEnhancer = selector.engine.enhancer()
+    @Provides fun books(selector: EngineSelector): com.avyaan.deckle.domain.imaging.BookSplitter = selector.engine.books()
+    @Provides fun sharpness(selector: EngineSelector): com.avyaan.deckle.domain.imaging.SharpnessMeter = selector.engine.sharpness()
 }
 
 @Module
@@ -65,6 +67,7 @@ abstract class ImagingBindings {
     @Binds abstract fun normalizer(impl: AndroidImageNormalizer): ImageNormalizer
     @Binds abstract fun thumbnails(impl: AndroidThumbnailMaker): ThumbnailMaker
     @Binds abstract fun rotator(impl: AndroidImageRotator): ImageRotator
+    @Binds abstract fun cardComposer(impl: com.avyaan.deckle.data.imaging.common.AndroidCardComposer): com.avyaan.deckle.domain.imaging.CardComposer
 
     // Strategy map for FR-31. Adding a mode = one new filter class + one binding here.
     @Binds @IntoMap @EnhancementModeKey(EnhancementMode.ORIGINAL) abstract fun original(f: OriginalFilter): EnhancementFilter

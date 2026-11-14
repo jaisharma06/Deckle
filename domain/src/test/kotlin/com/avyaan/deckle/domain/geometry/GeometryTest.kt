@@ -137,15 +137,15 @@ class AutoCaptureMachineTest {
         }
 
         @Test fun `holding keeps its start time`() {
-            val h = next(AutoCaptureState.Holding(quad, 100), det(quad, true), 900)
+            val h = next(AutoCaptureState.Holding(quad, 100), det(quad, true), 700)
             assertThat((h as AutoCaptureState.Holding).sinceMs).isEqualTo(100)
-            assertThat(h.progress(700)).isWithin(1e-3f).of(0.5f)
+            assertThat(h.progress(500)).isWithin(1e-3f).of(0.5f)
         }
 
-        @Test fun `fires after exactly 1200 ms when auto is on`() {
-            assertThat(next(AutoCaptureState.Holding(quad, 0), det(quad, true), 1_199))
+        @Test fun `fires after exactly 800 ms when auto is on`() {
+            assertThat(next(AutoCaptureState.Holding(quad, 0), det(quad, true), 799))
                 .isInstanceOf(AutoCaptureState.Holding::class.java)
-            assertThat(next(AutoCaptureState.Holding(quad, 0), det(quad, true), 1_200))
+            assertThat(next(AutoCaptureState.Holding(quad, 0), det(quad, true), 800))
                 .isEqualTo(AutoCaptureState.Firing(quad))
         }
 
@@ -179,11 +179,11 @@ class AutoCaptureMachineTest {
         @Test fun `page removed then time elapsed re-arms`() {
             val gone = next(cooling, det(null, false), 500)
             assertThat((gone as AutoCaptureState.Cooldown).pageChanged).isTrue()
-            assertThat(next(gone, det(quad, false), 1_600)).isEqualTo(AutoCaptureState.Tracking(quad))
+            assertThat(next(gone, det(quad, false), 1_100)).isEqualTo(AutoCaptureState.Tracking(quad))
         }
 
         @Test fun `page changed but too soon stays in cooldown`() {
-            val s = next(cooling, det(null, false), 1_000)
+            val s = next(cooling, det(null, false), 900)
             assertThat(s).isInstanceOf(AutoCaptureState.Cooldown::class.java)
         }
     }

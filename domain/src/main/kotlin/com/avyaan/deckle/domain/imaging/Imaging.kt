@@ -127,3 +127,35 @@ public interface ThumbnailMaker {
         public const val THUMB_LONG_EDGE: Int = 320
     }
 }
+
+/**
+ * NV-10: how sharp a straightened page is. Higher is sharper; null means "can't tell" (a blank or very
+ * low-contrast page, or no imaging library), which never counts as blurry.
+ */
+public fun interface SharpnessMeter {
+    public suspend fun measure(imagePath: String): Float?
+}
+
+/** NV-10: where "blurry" starts. Calibrated on device (see the data module's SharpnessCalibrationTest). */
+public object BlurPolicy {
+    public const val BLURRY_BELOW: Float = 0.30f
+
+    public fun isBlurry(score: Float?): Boolean = score != null && score < BLURRY_BELOW
+}
+
+/**
+ * NV-11: lays both sides of an ID card out on one A4 page at real card size (85.6 × 54 mm), front above
+ * back, so the printout can be handed over as a photocopy. [backPath] null: a page with the front only.
+ */
+public interface CardComposer {
+    public suspend fun compose(frontPath: String, backPath: String?, out: String): Outcome<ImageSize>
+}
+
+/**
+ * NV-12: splits a straightened two-page book spread at the spine into a left and a right page, flattening
+ * the curl near the spine as far as it can. Never fails just because the curl can't be judged: then the
+ * halves are only split.
+ */
+public fun interface BookSplitter {
+    public suspend fun split(spreadPath: String, leftOut: String, rightOut: String): Outcome<Unit>
+}

@@ -107,7 +107,7 @@ Phases run in this order. Each phase starts only after the previous one is confi
 | Phase | Features | Status |
 |---|---|---|
 | **1. Quick wins** | NV-01 multi-select in review · NV-02 duplicate page · NV-04 library filters (plus a page-count sort) · NV-05 capture sound and haptics settings · merge (already exists, quick check only) | Built, awaiting phone check |
-| **2. Smarter scanning** | NV-14 auto-capture improvements · NV-12 book mode · NV-11 ID card mode · NV-13 finger and shadow removal · NV-10 blur warning | — |
+| **2. Smarter scanning** | NV-14 auto-capture improvements · NV-12 book mode · NV-11 ID card mode · NV-13 finger and shadow removal · NV-10 blur warning | Built; not yet on the phone (connection dropped). Book mode passes its device test; finger fix and blur threshold await a device re-run |
 | **3. Organize** | NV-30 tags (folders already exist) · NV-03 pin favourites · NV-31 smart collections · NV-32 expiry reminders | — |
 | **4. Editing and signing** | NV-40 sign · NV-41 annotate · NV-42 redact · NV-43 watermark · NV-44 fill a scanned form | — |
 | **5. Export and share** | NV-50 compress to a target size · NV-51 more page sizes and margins · password PDFs (already exist, quick check only) · NV-52 long image / share as images · NV-53 share presets | — |

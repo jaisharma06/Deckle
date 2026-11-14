@@ -25,6 +25,7 @@ import com.avyaan.deckle.domain.ocr.RunOcrUseCase
 import com.avyaan.deckle.domain.ocr.TextRecognizer
 import com.avyaan.deckle.domain.page.RenamePageUseCase
 import com.avyaan.deckle.domain.page.ReorderPageUseCase
+import com.avyaan.deckle.domain.scan.CaptureKind
 import com.avyaan.deckle.domain.scan.CommitScanSessionUseCase
 import com.avyaan.deckle.domain.scan.StagedCapture
 import com.avyaan.deckle.domain.scan.StagedStatus
@@ -44,8 +45,10 @@ class UseCaseTest {
     private val ocr = FakeOcrScheduler()
     private val settings = FakeSettingsRepository(AppSettings(saveOriginals = false))
 
+    private val composer = RecordingComposer(files)
+
     private fun commit() = CommitScanSessionUseCase(
-        sessions, docs, pages, files, FakeThumbnailMaker(files), tx, ocr, settings, SequentialIds("page"), clock,
+        sessions, docs, pages, files, FakeThumbnailMaker(files), tx, ocr, settings, SequentialIds("page"), clock, composer,
     )
 
     private suspend fun readySession(count: Int): String {
@@ -79,6 +82,44 @@ class UseCaseTest {
         assertThat(files.files.keys.none { it.contains("/staging/") && !it.contains(".source.") }).isTrue()
         assertThat(ocr.enqueued).containsExactlyElementsIn(saved.map { it.id })
         assertThat(sessions.discarded).containsExactly(sessionId)
+    }
+
+    @Test fun `an ID card front and back are saved as one page, between the pages around them`() = runTest {
+        val sessionId = readySession(4)
+        sessions.update(sessionId) { s ->
+            s.copy(captures = s.captures.mapIndexed { i, c ->
+                when (i) {
+                    1 -> c.copy(kind = CaptureKind.ID_FRONT, group = "card")
+                    2 -> c.copy(kind = CaptureKind.ID_BACK, group = "card")
+                    else -> c
+                }
+            })
+        }
+        val (front, back) = sessions.get(sessionId)!!.captures.let { it[1] to it[2] }
+
+        val docId = (commit()(sessionId) as Outcome.Success).value
+
+        val saved = pages.pages(docId).sortedBy { it.orderIndex }
+        assertThat(saved).hasSize(3)                                   // page, card, page
+        assertThat(composer.calls).containsExactly(
+            Triple(front.basePath, back.basePath, "base"),
+            Triple(front.processedPath, back.processedPath, "processed"),
+        )
+        val card = saved[1]
+        assertThat(card.sourcePath).isNull()                           // a composite has no single original
+        assertThat(files.files).containsKey(card.basePath)
+        assertThat(files.files).containsKey(card.processedPath)
+        assertThat(card.widthPx to card.heightPx).isEqualTo(2480 to 3508)
+    }
+
+    @Test fun `an ID card with only one side is still saved, as a page with that side`() = runTest {
+        val sessionId = readySession(1)
+        sessions.update(sessionId) { s -> s.copy(captures = s.captures.map { it.copy(kind = CaptureKind.ID_BACK, group = "card") }) }
+        val only = sessions.get(sessionId)!!.captures.single()
+
+        commit()(sessionId)
+
+        assertThat(composer.calls.first()).isEqualTo(Triple(only.basePath, null, "base"))
     }
 
     @Test fun `commit rolls files back to staging when the database write fails`() = runTest {
@@ -224,6 +265,15 @@ class UseCaseTest {
         com.avyaan.deckle.domain.geometry.Rotation.R0, EnhancementMode.COLOUR, Adjustments.NEUTRAL, 100, 100,
         com.avyaan.deckle.domain.ocr.OcrState.QUEUED,
     )
+
+    private class RecordingComposer(private val files: FakeFileStore) : com.avyaan.deckle.domain.imaging.CardComposer {
+        val calls = mutableListOf<Triple<String?, String?, String>>()
+        override suspend fun compose(frontPath: String, backPath: String?, out: String): Outcome<ImageSize> {
+            calls += Triple(frontPath, backPath, if ("processed" in out) "processed" else "base")
+            files.put(out)
+            return Outcome.Success(ImageSize(2480, 3508))
+        }
+    }
 
     private class CopyEnhancer(private val files: FakeFileStore) : PageEnhancer {
         override suspend fun enhance(basePath: String, mode: EnhancementMode, adjustments: Adjustments, out: String) =

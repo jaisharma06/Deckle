@@ -155,7 +155,15 @@ fun ReviewRoute(
                 when {
                     state.pages.isEmpty() -> Spacer(Modifier.weight(1f))
                     state.selecting -> SelectionGrid(state, Modifier.weight(1f)) { haptics.tick(); vm.onEvent(ReviewEvent.ToggleSelect(it)) }
-                    else -> PagePager(state, Modifier.weight(1f)) { vm.onEvent(ReviewEvent.PageChanged(it)) }
+                    else -> Box(Modifier.weight(1f)) {
+                        PagePager(state, Modifier.fillMaxSize()) { vm.onEvent(ReviewEvent.PageChanged(it)) }
+                        BlurBanner(
+                            visible = state.current?.blurry == true,
+                            onRetake = { haptics.tick(); vm.onEvent(ReviewEvent.RetakeBlurry) },
+                            onKeep = { haptics.tick(); vm.onEvent(ReviewEvent.KeepBlurry) },
+                            modifier = Modifier.align(Alignment.TopCenter).padding(top = Spacing.s),
+                        )
+                    }
                 }
                 if (state.selecting) SelectionControls(state, vm::onEvent, onTick = haptics::tick)
                 else Controls(state, vm::onEvent, onTick = haptics::tick)
@@ -170,8 +178,11 @@ private fun TopRow(state: ReviewUiState, onBack: () -> Unit, onSelect: () -> Uni
     Column(Modifier.fillMaxWidth().statusBarsPadding()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = Spacing.xs), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(DeckleIcons.Back, stringResource(R.string.action_back), tint = Color.White) }
-            AnimatedContent(state.currentIndex to state.pages.size, transitionSpec = { fadeIn() togetherWith fadeOut() }, label = "pos", modifier = Modifier.weight(1f)) { (i, n) ->
-                if (n > 0) Text(stringResource(R.string.review_page_of, i + 1, n), style = MaterialTheme.typography.titleMedium, color = Color.White)
+            AnimatedContent(Triple(state.currentIndex, state.pages.size, state.current?.kind), transitionSpec = { fadeIn() togetherWith fadeOut() }, label = "pos", modifier = Modifier.weight(1f)) { (i, n, kind) ->
+                if (n > 0) Column {
+                    Text(stringResource(R.string.review_page_of, i + 1, n), style = MaterialTheme.typography.titleMedium, color = Color.White)
+                    kind?.label()?.let { Text(stringResource(it), style = MaterialTheme.typography.labelMedium, color = CameraColors.Ring) }
+                }
             }
             if (state.pages.size > 1) {
                 IconButton(onClick = onSelect) { Icon(DeckleIcons.Grid, stringResource(R.string.review_select_pages), tint = Color.White) }
@@ -388,6 +399,15 @@ private fun SelectionGrid(state: ReviewUiState, modifier: Modifier, onToggle: (S
                     } else {
                         Box(Modifier.fillMaxSize().shimmer())
                     }
+                    if (page.blurry) {
+                        val blurryLabel = stringResource(R.string.cd_blurry)
+                        Icon(
+                            DeckleIcons.Warning, blurryLabel,
+                            tint = CameraColors.Ring,
+                            modifier = Modifier.align(Alignment.TopEnd).padding(Spacing.xs).size(20.dp)
+                                .background(Color.Black.copy(alpha = 0.6f), androidx.compose.foundation.shape.CircleShape).padding(2.dp),
+                        )
+                    }
                     androidx.compose.animation.AnimatedVisibility(
                         selected,
                         enter = scaleIn(deckleSpring(DeckleMotion.Spring.Pop)) + fadeIn(),
@@ -429,4 +449,32 @@ private fun SelectionControls(state: ReviewUiState, onEvent: (ReviewEvent) -> Un
             ToolButton(DeckleIcons.RotateRight, R.string.review_rotate) { if (enabled) { onTick(); onEvent(ReviewEvent.RotateSelected) } }
         }
     }
+}
+
+/** NV-10: a gentle, non-blocking nudge. Never retakes on its own. */
+@Composable
+private fun BlurBanner(visible: Boolean, onRetake: () -> Unit, onKeep: () -> Unit, modifier: Modifier = Modifier) {
+    AnimatedVisibility(visible, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically(), modifier = modifier) {
+        Row(
+            Modifier
+                .padding(horizontal = Spacing.l)
+                .clip(MaterialTheme.shapes.medium)
+                .background(CameraColors.Chrome)
+                .padding(start = Spacing.m, end = Spacing.xs),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(DeckleIcons.Warning, null, tint = CameraColors.Ring, modifier = Modifier.size(20.dp))
+            Spacer(Modifier.width(Spacing.s))
+            Text(stringResource(R.string.review_blurry), color = Color.White, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f, fill = false))
+            TextButton(onClick = onRetake) { Text(stringResource(R.string.review_blurry_retake), color = CameraColors.Ring) }
+            TextButton(onClick = onKeep) { Text(stringResource(R.string.review_blurry_keep), color = Color.White) }
+        }
+    }
+}
+
+private fun com.avyaan.deckle.domain.scan.CaptureKind.label(): Int? = when (this) {
+    com.avyaan.deckle.domain.scan.CaptureKind.PAGE -> null
+    com.avyaan.deckle.domain.scan.CaptureKind.ID_FRONT -> R.string.review_kind_card_front
+    com.avyaan.deckle.domain.scan.CaptureKind.ID_BACK -> R.string.review_kind_card_back
+    com.avyaan.deckle.domain.scan.CaptureKind.BOOK_SPREAD -> R.string.review_kind_book
 }

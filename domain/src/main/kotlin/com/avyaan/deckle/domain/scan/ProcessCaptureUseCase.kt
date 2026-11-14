@@ -6,11 +6,13 @@ import com.avyaan.deckle.domain.common.Logger
 import com.avyaan.deckle.domain.common.Outcome
 import com.avyaan.deckle.domain.common.newRevision
 import com.avyaan.deckle.domain.geometry.Quad
+import com.avyaan.deckle.domain.imaging.BookSplitter
 import com.avyaan.deckle.domain.imaging.ImageInput
 import com.avyaan.deckle.domain.imaging.ImageNormalizer
 import com.avyaan.deckle.domain.imaging.PageDetector
 import com.avyaan.deckle.domain.imaging.PageEnhancer
 import com.avyaan.deckle.domain.imaging.PerspectiveCorrector
+import com.avyaan.deckle.domain.imaging.SharpnessMeter
 import com.avyaan.deckle.domain.page.PageFileStore
 import javax.inject.Inject
 import javax.inject.Provider
@@ -28,6 +30,8 @@ public class ProcessCaptureUseCase @Inject constructor(
     private val enhancer: PageEnhancer,
     private val ids: IdGenerator,
     private val logger: Logger,
+    private val sharpness: SharpnessMeter,
+    private val books: BookSplitter,
     /** Breaks the queue ↔ use case cycle: rendering is queued after normalising. */
     private val queue: Provider<ProcessingQueue>,
 ) {
@@ -74,6 +78,16 @@ public class ProcessCaptureUseCase @Inject constructor(
 
         val corrected = corrector.correct(capture.sourcePath, capture.quad, capture.rotation, base)
         if (corrected is Outcome.Failure) return fail(sessionId, captureId, "correct", corrected.error)
+        if (capture.kind == CaptureKind.BOOK_SPREAD) return splitSpread(sessionId, capture, base)
+        // Measured on the straightened page, so the table or background around it doesn't count (NV-10).
+        // Cheap (a ~1200 px copy), so every render re-measures rather than tracking what changed.
+        val score = try {
+            sharpness.measure(base)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            null
+        }
         val size = when (val r = enhancer.enhance(base, capture.mode, capture.adjustments, processed)) {
             is Outcome.Success -> r.value
             is Outcome.Failure -> { files.delete(base); return fail(sessionId, captureId, "enhance", r.error) }
@@ -92,11 +106,44 @@ public class ProcessCaptureUseCase @Inject constructor(
                     widthPx = size.width,
                     heightPx = size.height,
                     revision = current.revision + 1,
+                    sharpness = score,
                     status = if (stillCurrent) StagedStatus.READY else StagedStatus.PROCESSING,
                 )
             }
         }
         superseded.filterNotNull().forEach { files.delete(it) }
+    }
+
+    /**
+     * NV-12: the straightened spread becomes two ordinary captures, in its place in the scan, each with the
+     * half as its "original" (so it can still be cropped, rotated and filtered on its own).
+     */
+    private suspend fun splitSpread(sessionId: String, spread: StagedCapture, straightened: String) {
+        val halves = listOf(ids.newId(), ids.newId())
+        val raws = halves.map { files.stagingPath(sessionId, it, "raw") }
+        val split = books.split(straightened, raws[0], raws[1])
+        files.delete(straightened)
+        if (split is Outcome.Failure) return fail(sessionId, spread.id, "split", split.error)
+
+        val pages = halves.mapIndexed { i, id ->
+            val source = files.stagingPath(sessionId, id, "source")
+            val preview = files.stagingPath(sessionId, id, "preview")
+            val size = when (val r = normalizer.normalize(ImageInput.FilePath(raws[i]), source, preview)) {
+                is Outcome.Success -> r.value
+                is Outcome.Failure -> { raws.forEach { files.delete(it) }; return fail(sessionId, spread.id, "split-normalize", r.error) }
+            }
+            files.delete(raws[i])
+            StagedCapture(
+                id = id, sourcePath = source, previewPath = preview, sourceWidth = size.width, sourceHeight = size.height,
+                mode = spread.mode, adjustments = spread.adjustments,
+                status = StagedStatus.PROCESSING, awaitingNormalize = false,
+            )
+        }
+        store.update(sessionId) { s ->
+            s.copy(captures = s.captures.flatMap { if (it.id == spread.id) pages else listOf(it) })
+        }
+        listOf(spread.sourcePath, spread.previewPath).forEach { files.delete(it) }
+        pages.forEach { queue.get().submit(ProcessingQueue.Job.Render(sessionId, it.id)) }
     }
 
     /** Every failed page says which step failed and why: a FAILED status alone is undiagnosable. */

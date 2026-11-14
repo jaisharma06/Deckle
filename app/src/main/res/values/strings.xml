@@ -34,6 +34,8 @@
     <string name="library_sort_modified">Date modified</string>
     <string name="library_sort_title">Title</string>
     <string name="library_sort_pages">Page count</string>
+    <string name="settings_remove_fingers">Remove fingers</string>
+    <string name="settings_remove_fingers_desc">Cover fingertips holding the page edge (Magic, Colour and B&amp;W filters)</string>
     <string name="settings_shutter_sound">Shutter sound</string>
     <string name="settings_shutter_sound_desc">Play a click when a page is captured</string>
     <string name="settings_vibration">Vibration</string>
@@ -90,6 +92,11 @@
     <string name="capture_auto_off">Auto-capture off</string>
     <string name="capture_mode_single">Single</string>
     <string name="capture_mode_batch">Batch</string>
+    <string name="capture_mode_id_card">ID card</string>
+    <string name="capture_mode_book">Book</string>
+    <string name="capture_hint_card_front">ID card · front side</string>
+    <string name="capture_hint_card_back">Now turn the card over · back side</string>
+    <string name="capture_hint_book">Fit both open pages in the frame</string>
     <string name="capture_import">Import from photos</string>
     <string name="capture_review">Review scanned pages</string>
     <string name="capture_hint_looking">Looking for a page…</string>
@@ -163,6 +170,13 @@
     <string name="review_delete_page">Delete page</string>
     <string name="review_page_deleted">Page deleted</string>
     <string name="review_select_pages">Select pages</string>
+    <string name="review_blurry">This page looks blurry</string>
+    <string name="review_kind_card_front">ID card · front (saved on one page with the back)</string>
+    <string name="review_kind_card_back">ID card · back (saved on one page with the front)</string>
+    <string name="review_kind_book">Book spread · splitting into two pages…</string>
+    <string name="review_blurry_retake">Retake</string>
+    <string name="review_blurry_keep">Keep</string>
+    <string name="cd_blurry">Looks blurry</string>
     <string name="action_select_all">Select all</string>
     <plurals name="review_pages_deleted">
         <item quantity="one">%d page deleted</item>

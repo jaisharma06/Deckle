@@ -13,6 +13,7 @@ import com.avyaan.deckle.domain.export.PageSizePolicy
 import com.avyaan.deckle.domain.export.QualityPreset
 import com.avyaan.deckle.domain.imaging.EnhancementMode
 import com.avyaan.deckle.domain.settings.AppSettings
+import com.avyaan.deckle.domain.settings.CaptureMode
 import com.avyaan.deckle.domain.settings.FlashMode
 import com.avyaan.deckle.domain.settings.SettingsRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -50,12 +51,14 @@ public class DataStoreSettingsRepository @Inject constructor(
             defaultPageSize = p[Keys.PAGE_SIZE].toEnum(d.defaultPageSize),
             autoCapture = p[Keys.AUTO_CAPTURE] ?: d.autoCapture,
             flash = p[Keys.FLASH].toEnum(d.flash),
-            batchMode = p[Keys.BATCH] ?: d.batchMode,
+            // Older installs stored only a "batch" switch; it maps onto the mode until a mode is saved.
+            captureMode = p[Keys.CAPTURE_MODE].toEnum(if (p[Keys.BATCH] == true) CaptureMode.BATCH else d.captureMode),
             saveOriginals = p[Keys.SAVE_ORIGINALS] ?: d.saveOriginals,
             secureScreens = p[Keys.SECURE] ?: d.secureScreens,
             hasSeenCaptureTips = p[Keys.TIPS_SEEN] ?: d.hasSeenCaptureTips,
             shutterSound = p[Keys.SHUTTER_SOUND] ?: d.shutterSound,
             vibration = p[Keys.VIBRATION] ?: d.vibration,
+            removeFingers = p[Keys.REMOVE_FINGERS] ?: d.removeFingers,
         )
     }
 
@@ -67,12 +70,14 @@ public class DataStoreSettingsRepository @Inject constructor(
         p[Keys.PAGE_SIZE] = s.defaultPageSize.name
         p[Keys.AUTO_CAPTURE] = s.autoCapture
         p[Keys.FLASH] = s.flash.name
-        p[Keys.BATCH] = s.batchMode
+        p[Keys.CAPTURE_MODE] = s.captureMode.name
+        p[Keys.BATCH] = s.captureMode == CaptureMode.BATCH
         p[Keys.SAVE_ORIGINALS] = s.saveOriginals
         p[Keys.SECURE] = s.secureScreens
         p[Keys.TIPS_SEEN] = s.hasSeenCaptureTips
         p[Keys.SHUTTER_SOUND] = s.shutterSound
         p[Keys.VIBRATION] = s.vibration
+        p[Keys.REMOVE_FINGERS] = s.removeFingers
     }
 
     private inline fun <reified E : Enum<E>> String?.toEnum(default: E): E =
@@ -92,6 +97,8 @@ public class DataStoreSettingsRepository @Inject constructor(
         val TIPS_SEEN = booleanPreferencesKey("capture_tips_seen")
         val SHUTTER_SOUND = booleanPreferencesKey("shutter_sound")
         val VIBRATION = booleanPreferencesKey("vibration")
+        val REMOVE_FINGERS = booleanPreferencesKey("remove_fingers")
+        val CAPTURE_MODE = stringPreferencesKey("capture_mode")
     }
 
 }

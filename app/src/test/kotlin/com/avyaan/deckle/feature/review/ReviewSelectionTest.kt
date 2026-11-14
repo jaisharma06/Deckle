@@ -22,6 +22,7 @@ import com.avyaan.deckle.domain.fakes.SequentialIds
 import com.avyaan.deckle.domain.geometry.Quad
 import com.avyaan.deckle.domain.geometry.Rotation
 import com.avyaan.deckle.domain.imaging.Adjustments
+import com.avyaan.deckle.domain.imaging.BlurPolicy
 import com.avyaan.deckle.domain.imaging.EnhancementMode
 import com.avyaan.deckle.domain.imaging.ImageInput
 import com.avyaan.deckle.domain.imaging.ImageNormalizer
@@ -92,7 +93,7 @@ class ReviewSelectionTest {
         sessions.create("s1", 0, null, null)
         sessions.update("s1") { it.copy(captures = listOf(capture("c1"), capture("c2"), capture("c3"))) }
         val queue = ProcessingQueue(
-            ProcessCaptureUseCase(sessions, files, Unused, Unused, Unused, Unused, ids, NoopLogger) { error("unused") },
+            ProcessCaptureUseCase(sessions, files, Unused, Unused, Unused, Unused, ids, NoopLogger, { null }, { _, _, _ -> error("unused") }) { error("unused") },
             backgroundScope, dispatchers, NoopLogger,
         )
         val pages = FakePageRepository()
@@ -105,7 +106,7 @@ class ReviewSelectionTest {
                     edit = EditCaptureUseCase(sessions, queue),
                     removeCapture = RemoveCaptureUseCase(sessions, files),
                     discard = DiscardScanSessionUseCase(sessions),
-                    commit = CommitScanSessionUseCase(sessions, docs, pages, files, FakeThumbnailMaker(files), FakeTransactionRunner(), FakeOcrScheduler(), settings, ids, FakeClock()),
+                    commit = CommitScanSessionUseCase(sessions, docs, pages, files, FakeThumbnailMaker(files), FakeTransactionRunner(), FakeOcrScheduler(), settings, ids, FakeClock(), NoComposer),
                     enhancer = Unused,
                     files = files,
                     resumeProcessing = ResumeProcessingUseCase(sessions, files, queue),
@@ -205,6 +206,34 @@ class ReviewSelectionTest {
         assertThat(byId.getValue("c3").adjustments.brightness).isEqualTo(0.1f)
     }
 
+    // ---- NV-10 blur banner ----
+
+    @Test
+    fun `a blurry page shows the banner until the user keeps it`() = runTest(dispatcher) {
+        val vm = review()
+        sessions.update("s1") { it.updateCapture("c1") { c -> c.copy(sharpness = BlurPolicy.BLURRY_BELOW / 2) } }
+        assertThat(vm.state.value.current?.id).isEqualTo("c1")
+        assertThat(vm.state.value.current?.blurry).isTrue()
+        assertThat(vm.state.value.pages.single { it.id == "c2" }.blurry).isFalse()
+
+        vm.onEvent(ReviewEvent.KeepBlurry)
+        advanceUntilIdle()
+        assertThat(vm.state.value.current?.blurry).isFalse()
+    }
+
+    @Test
+    fun `retake removes the blurry page and opens the camera on the same scan`() = runTest(dispatcher) {
+        val vm = review()
+        val effects = mutableListOf<ReviewEffect>()
+        backgroundScope.launch { vm.effects.toList(effects) }
+        sessions.update("s1") { it.updateCapture("c1") { c -> c.copy(sharpness = BlurPolicy.BLURRY_BELOW / 2) } }
+
+        vm.onEvent(ReviewEvent.RetakeBlurry)
+        advanceUntilIdle()
+        assertThat(captures().map { it.id }).containsExactly("c2", "c3").inOrder()
+        assertThat(effects).contains(ReviewEffect.OpenCapture("s1"))
+    }
+
     private object Unused : PageEnhancer, ImageRotator, ImageNormalizer, PageDetector, PerspectiveCorrector {
         override suspend fun enhance(basePath: String, mode: EnhancementMode, adjustments: Adjustments, out: String) = error("unused")
         override suspend fun preview(basePath: String, mode: EnhancementMode, adjustments: Adjustments, longEdge: Int, out: String) =
@@ -216,5 +245,9 @@ class ReviewSelectionTest {
         override fun detect(frame: LumaFrame): Quad? = null
         override suspend fun detect(imagePath: String): Quad? = null
         override suspend fun correct(sourcePath: String, quad: Quad, rotation: Rotation, out: String) = error("unused")
+    }
+
+    private object NoComposer : com.avyaan.deckle.domain.imaging.CardComposer {
+        override suspend fun compose(frontPath: String, backPath: String?, out: String) = error("unused")
     }
 }

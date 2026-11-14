@@ -42,6 +42,8 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
+import com.avyaan.deckle.domain.scan.CaptureKind
+import com.avyaan.deckle.domain.settings.CaptureMode
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
@@ -78,7 +80,7 @@ class CaptureViewModelTest {
             override val preview = dispatcher
         }
         lateinit var queue: ProcessingQueue
-        val process = ProcessCaptureUseCase(store, files, FailingNormalizer, NoDetector, Unused, Unused, ids, NoopLogger) { queue }
+        val process = ProcessCaptureUseCase(store, files, FailingNormalizer, NoDetector, Unused, Unused, ids, NoopLogger, { null }, { _, _, _ -> error("unused") }) { queue }
         queue = ProcessingQueue(process, backgroundScope, dispatchers, NoopLogger)
         val settingsRepo = FakeSettingsRepository(settings)
         return CaptureViewModel(
@@ -102,7 +104,7 @@ class CaptureViewModelTest {
         vm.effects.test {
             repeat(5) { vm.detect(page); now += 50 }     // fills the stability window
             expectNoEvents()
-            now += 1_300                                 // past the 1.2 s hold
+            now += 900                                   // past the 0.8 s hold (NV-14)
             vm.detect(page)
             assertThat(awaitItem()).isEqualTo(CaptureEffect.TakePicture)
             assertThat(vm.state.value.isCapturing).isTrue()
@@ -119,6 +121,50 @@ class CaptureViewModelTest {
             vm.detect(page)
             expectNoEvents()
             assertThat(vm.state.value.hint).isEqualTo(CaptureHint.READY)
+        }
+    }
+
+    /** Takes one picture: shutter, then the camera layer reports the file. */
+    private fun TestScope.shoot(vm: CaptureViewModel, name: String) {
+        vm.onEvent(CaptureEvent.ShutterPressed)
+        files.put("/cache/$name.jpg")
+        vm.onEvent(CaptureEvent.PictureTaken("/cache/$name.jpg"))
+        now += 1_000
+        advanceUntilIdle()
+    }
+
+    @Test
+    fun `ID card mode takes the front, asks for the back, then opens Review with the pair`() = runTest(dispatcher) {
+        val vm = viewModel(AppSettings(captureMode = CaptureMode.ID_CARD))
+        advanceUntilIdle()
+        vm.effects.test {
+            assertThat(vm.state.value.awaitingCardBack).isFalse()
+            shoot(vm, "front")
+            assertThat(awaitItem()).isEqualTo(CaptureEffect.TakePicture)
+            assertThat(vm.state.value.awaitingCardBack).isTrue()
+            vm.detect(null)
+            assertThat(vm.state.value.hint).isEqualTo(CaptureHint.CARD_BACK)
+
+            shoot(vm, "back")
+            assertThat(awaitItem()).isEqualTo(CaptureEffect.TakePicture)
+            val review = awaitItem() as CaptureEffect.OpenReview
+            val captures = store.get(review.sessionId)!!.captures
+            assertThat(captures.map { it.kind }).containsExactly(CaptureKind.ID_FRONT, CaptureKind.ID_BACK).inOrder()
+            assertThat(captures.map { it.group }.distinct()).hasSize(1)
+            assertThat(vm.state.value.awaitingCardBack).isFalse()
+        }
+    }
+
+    @Test
+    fun `book mode stays in the camera and marks each shot as a spread`() = runTest(dispatcher) {
+        val vm = viewModel(AppSettings(captureMode = CaptureMode.BOOK))
+        advanceUntilIdle()
+        vm.effects.test {
+            shoot(vm, "spread1")
+            assertThat(awaitItem()).isEqualTo(CaptureEffect.TakePicture)
+            expectNoEvents()                                       // no crop screen, no Review
+            val session = vm.state.value.sessionId!!
+            assertThat(store.get(session)!!.captures.single().kind).isEqualTo(CaptureKind.BOOK_SPREAD)
         }
     }
 

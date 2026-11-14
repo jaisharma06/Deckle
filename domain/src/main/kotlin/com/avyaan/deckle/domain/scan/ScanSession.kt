@@ -30,6 +30,17 @@ public data class ScanSession(
         copy(captures = captures.map { if (it.id == id) transform(it) else it })
 }
 
+/** NV-11/12: what a capture becomes when the scan is saved. */
+@Serializable
+public enum class CaptureKind {
+    /** One page. */
+    PAGE,
+    /** ID card sides: saved together as one page with both sides at real card size. */
+    ID_FRONT, ID_BACK,
+    /** An open book: split into a left and a right page as soon as it has been straightened. */
+    BOOK_SPREAD,
+}
+
 @Serializable
 public enum class StagedStatus { CAPTURED, PROCESSING, READY, FAILED }
 
@@ -56,7 +67,17 @@ public data class StagedCapture(
     val status: StagedStatus = StagedStatus.CAPTURED,
     /** True until the capture has been normalised and detected. */
     val awaitingNormalize: Boolean = true,
-)
+    /** NV-10: sharpness of the last render's base image (see [com.avyaan.deckle.domain.imaging.SharpnessMeter]). */
+    val sharpness: Float? = null,
+    /** NV-10: the user chose to keep this page despite the blur warning. */
+    val blurAccepted: Boolean = false,
+    val kind: CaptureKind = CaptureKind.PAGE,
+    /** NV-11: the front and back of one ID card share this id. */
+    val group: String? = null,
+) {
+    /** NV-10: worth a "this page looks blurry" banner. */
+    val looksBlurry: Boolean get() = !blurAccepted && com.avyaan.deckle.domain.imaging.BlurPolicy.isBlurry(sharpness)
+}
 
 public interface ScanSessionStore {
     public fun observe(sessionId: String): Flow<ScanSession?>

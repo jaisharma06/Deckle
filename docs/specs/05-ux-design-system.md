@@ -155,7 +155,7 @@ These are the moments that make the app feel crafted. Each has a precise spec so
 ### 4.2 Shutter and auto-capture
 
 - Shutter: 76 dp white disc inside a 4 dp white ring with 4 dp gap. Press → disc scales to 0.88 (`Press` spring), release → 1.0.
-- **Auto-capture on:** while `Holding`, a `tertiary` arc sweeps around the ring from 12 o'clock, progress = `Holding.progress` (0→1 over 1.2 s). If stability is lost the arc **unwinds** quickly (Short) rather than vanishing, so the user sees why it didn't fire.
+- **Auto-capture on:** while `Holding`, a `tertiary` arc sweeps around the ring from 12 o'clock, progress = `Holding.progress` (0→1 over 0.8 s since NV-14; was 1.2 s). If stability is lost the arc **unwinds** quickly (Short) rather than vanishing, so the user sees why it didn't fire.
 - On fire (manual or auto):
   1. Haptic `CONFIRM` (API 30+) / `VIRTUAL_KEY` fallback.
   2. A white flash overlay at 60 % alpha, Instant in, Short out.

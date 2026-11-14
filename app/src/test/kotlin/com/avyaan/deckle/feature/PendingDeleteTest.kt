@@ -107,7 +107,7 @@ class PendingDeleteTest {
         sessions.create("s1", 0, null, null)
         sessions.update("s1") { it.copy(captures = listOf(capture("c1"), capture("c2"))) }
         val queue = ProcessingQueue(
-            ProcessCaptureUseCase(sessions, files, Unused, Unused, Unused, Unused, ids, NoopLogger) { error("unused") },
+            ProcessCaptureUseCase(sessions, files, Unused, Unused, Unused, Unused, ids, NoopLogger, { null }, { _, _, _ -> error("unused") }) { error("unused") },
             backgroundScope, dispatchers, NoopLogger,
         )
         val pages = FakePageRepository()
@@ -119,7 +119,7 @@ class PendingDeleteTest {
                 edit = EditCaptureUseCase(sessions, queue),
                 removeCapture = RemoveCaptureUseCase(sessions, files),
                 discard = DiscardScanSessionUseCase(sessions),
-                commit = CommitScanSessionUseCase(sessions, docs, pages, files, FakeThumbnailMaker(files), FakeTransactionRunner(), FakeOcrScheduler(), settings, ids, FakeClock()),
+                commit = CommitScanSessionUseCase(sessions, docs, pages, files, FakeThumbnailMaker(files), FakeTransactionRunner(), FakeOcrScheduler(), settings, ids, FakeClock(), NoComposer),
                 enhancer = Unused,
                 files = files,
                 resumeProcessing = ResumeProcessingUseCase(sessions, files, queue),
@@ -223,5 +223,9 @@ class PendingDeleteTest {
         override fun detect(frame: com.avyaan.deckle.domain.imaging.LumaFrame): Quad? = null
         override suspend fun detect(imagePath: String): Quad? = null
         override suspend fun correct(sourcePath: String, quad: Quad, rotation: Rotation, out: String) = error("unused")
+    }
+
+    private object NoComposer : com.avyaan.deckle.domain.imaging.CardComposer {
+        override suspend fun compose(frontPath: String, backPath: String?, out: String) = error("unused")
     }
 }

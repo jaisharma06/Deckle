@@ -42,7 +42,13 @@ public class AddCaptureUseCase @Inject constructor(
     private val queue: ProcessingQueue,
     private val ids: IdGenerator,
 ) {
-    public suspend operator fun invoke(sessionId: String, input: ImageInput, liveQuad: Quad?): String {
+    public suspend operator fun invoke(
+        sessionId: String,
+        input: ImageInput,
+        liveQuad: Quad?,
+        kind: CaptureKind = CaptureKind.PAGE,
+        group: String? = null,
+    ): String {
         val captureId = ids.newId()
         // Camera output is adopted into staging first, so a capture survives process death (spec 02 §5.2).
         // Content URIs (imports) stay where they are: the picker grants read access for the session.
@@ -62,6 +68,8 @@ public class AddCaptureUseCase @Inject constructor(
                     detectedQuad = liveQuad,
                     quad = liveQuad ?: Quad.FULL,
                     mode = mode,
+                    kind = kind,
+                    group = group,
                 ),
             )
         }
@@ -103,6 +111,11 @@ public class EditCaptureUseCase @Inject constructor(
     /** Multi-select in review (NV-01): a quarter turn for each chosen page. */
     public suspend fun rotateAll(sessionId: String, captureIds: Set<String>, clockwise: Boolean) {
         editMany(sessionId, captureIds) { it.copy(rotation = if (clockwise) it.rotation.clockwise() else it.rotation.counterClockwise()) }
+    }
+
+    /** NV-10 "Keep": the user saw the blur warning and wants this page anyway. No re-render needed. */
+    public suspend fun acceptBlur(sessionId: String, captureId: String) {
+        store.update(sessionId) { s -> s.updateCapture(captureId) { it.copy(blurAccepted = true) } }
     }
 
     /** [ids] null means every page. */

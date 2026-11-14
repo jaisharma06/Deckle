@@ -38,6 +38,9 @@ import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import com.avyaan.deckle.domain.imaging.BookSplitter
+import com.avyaan.deckle.domain.scan.CaptureKind
+import com.avyaan.deckle.domain.imaging.BlurPolicy
 import org.junit.jupiter.api.Test
 
 /**
@@ -56,6 +59,17 @@ class ProcessingFlowTest {
 
     private val userCrop = Quad(PointN(0.2f, 0.1f), PointN(0.8f, 0.1f), PointN(0.8f, 0.9f), PointN(0.2f, 0.9f))
 
+    /** Writes both halves, like the real splitter; records what it was given. */
+    private val splits = mutableListOf<String>()
+    private val books = BookSplitter { spread, left, right ->
+        splits += spread
+        files.put(left); files.put(right)
+        Outcome.Success(Unit)
+    }
+
+    /** What the sharpness meter reports for the next render. */
+    private var sharpnessScore: Float? = null
+
     private fun TestScope.wire(): Wiring {
         val dispatcher = StandardTestDispatcher(testScheduler)
         val dispatchers = object : DispatcherProvider {
@@ -67,7 +81,7 @@ class ProcessingFlowTest {
         }
         val ids = SequentialIds()
         lateinit var queue: ProcessingQueue
-        val process = ProcessCaptureUseCase(store, files, GatedNormalizer(files, normalizeGate).also { normalizer = it }, NoDetector, corrector, CopyEnhancer(files), ids, NoopLogger) { queue }
+        val process = ProcessCaptureUseCase(store, files, GatedNormalizer(files, normalizeGate).also { normalizer = it }, NoDetector, corrector, CopyEnhancer(files), ids, NoopLogger, { sharpnessScore }, books) { queue }
         queue = ProcessingQueue(process, backgroundScope, dispatchers, NoopLogger)
         return Wiring(
             process = process,
@@ -103,6 +117,62 @@ class ProcessingFlowTest {
         assertThat(statuses).doesNotContain(StagedStatus.FAILED)
         assertThat(capture.status).isEqualTo(StagedStatus.READY)
         assertThat(corrector.quads.last()).isEqualTo(userCrop)
+    }
+
+    @Test
+    fun `a blurry render is flagged, a sharp one isn't, and keeping it clears the warning`() = runTest {
+        val w = wire()
+        val session = w.start(null, null, null).id
+        files.put("/cache/capture/shot.jpg")
+        sharpnessScore = BlurPolicy.BLURRY_BELOW / 2
+        val captureId = w.add(session, ImageInput.FilePath("/cache/capture/shot.jpg"), liveQuad = null)
+        normalizeGate.complete(Unit)
+        runCurrent()
+        assertThat(store.get(session)!!.capture(captureId)!!.looksBlurry).isTrue()
+
+        w.edit.acceptBlur(session, captureId)
+        assertThat(store.get(session)!!.capture(captureId)!!.looksBlurry).isFalse()
+
+        // A re-crop re-measures; a sharp result is never flagged.
+        sharpnessScore = BlurPolicy.BLURRY_BELOW * 2
+        w.edit.setCrop(session, captureId, userCrop, Rotation.R0)
+        runCurrent()
+        assertThat(store.get(session)!!.capture(captureId)!!.sharpness).isEqualTo(BlurPolicy.BLURRY_BELOW * 2)
+    }
+
+    @Test
+    fun `a page the meter can't judge is never called blurry`() = runTest {
+        val w = wire()
+        val session = w.start(null, null, null).id
+        files.put("/cache/capture/shot.jpg")
+        sharpnessScore = null
+        val captureId = w.add(session, ImageInput.FilePath("/cache/capture/shot.jpg"), liveQuad = null)
+        normalizeGate.complete(Unit)
+        runCurrent()
+        assertThat(store.get(session)!!.capture(captureId)!!.looksBlurry).isFalse()
+    }
+
+    @Test
+    fun `a book spread becomes two pages in its place, each processed on its own`() = runTest {
+        val w = wire()
+        val session = w.start(null, null, null).id
+        files.put("/cache/capture/a.jpg"); files.put("/cache/capture/book.jpg"); files.put("/cache/capture/z.jpg")
+        val before = w.add(session, ImageInput.FilePath("/cache/capture/a.jpg"), liveQuad = null)
+        val spread = w.add(session, ImageInput.FilePath("/cache/capture/book.jpg"), liveQuad = null, kind = CaptureKind.BOOK_SPREAD)
+        val after = w.add(session, ImageInput.FilePath("/cache/capture/z.jpg"), liveQuad = null)
+        normalizeGate.complete(Unit)
+        runCurrent()
+
+        val captures = store.get(session)!!.captures
+        assertThat(captures).hasSize(4)
+        assertThat(captures.first().id).isEqualTo(before)
+        assertThat(captures.last().id).isEqualTo(after)
+        val halves = captures.subList(1, 3)
+        assertThat(halves.map { it.id }).doesNotContain(spread)
+        assertThat(halves.all { it.kind == CaptureKind.PAGE && it.status == StagedStatus.READY }).isTrue()
+        assertThat(halves.all { files.exists(it.sourcePath) && it.basePath != null }).isTrue()
+        assertThat(splits).hasSize(1)
+        assertThat(files.files.keys.none { it.contains("/$spread") }).isTrue()   // the spread's own files are gone
     }
 
     @Test

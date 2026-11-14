@@ -37,9 +37,12 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import com.avyaan.deckle.domain.scan.CaptureKind
+import com.avyaan.deckle.domain.settings.CaptureMode
+import java.util.UUID
 
 /** Hint chip text (spec 05 §4.3). */
-enum class CaptureHint { LOOKING, TIP, HOLD, CAPTURING, READY, NO_DETECTOR, BATCH }
+enum class CaptureHint { LOOKING, TIP, HOLD, CAPTURING, READY, NO_DETECTOR, BATCH, CARD_FRONT, CARD_BACK, BOOK }
 
 data class CaptureUiState(
     val sessionId: String? = null,
@@ -57,6 +60,8 @@ data class CaptureUiState(
     val hint: CaptureHint? = null,
     val isCapturing: Boolean = false,
     val showTips: Boolean = false,
+    /** NV-11: the front of an ID card is in; the next shot is its back. */
+    val awaitingCardBack: Boolean = false,
 )
 
 sealed interface CaptureEvent {
@@ -68,7 +73,7 @@ sealed interface CaptureEvent {
     data object PictureFailed : CaptureEvent
     data object CycleFlash : CaptureEvent
     data object ToggleAuto : CaptureEvent
-    data class SetBatch(val on: Boolean) : CaptureEvent
+    data class SetMode(val mode: CaptureMode) : CaptureEvent
     data class Imported(val uris: List<String>) : CaptureEvent
     data object OpenReview : CaptureEvent
     data object Close : CaptureEvent
@@ -137,7 +142,7 @@ class CaptureViewModel @Inject constructor(
             val session = startSession(existing, route.targetDocumentId, route.insertAfterPageId, targetFolderId = route.folderId)
             savedState[KEY_SESSION] = session.id
             sessionId.value = session.id
-            _state.update { it.copy(sessionId = session.id) }
+            _state.update { it.copy(sessionId = session.id, awaitingCardBack = savedState.get<String>(KEY_CARD_GROUP) != null) }
         }
         viewModelScope.launch {
             sessionId.filterNotNull().flatMapLatest { sessions.observe(it) }.collect { session ->
@@ -160,9 +165,11 @@ class CaptureViewModel @Inject constructor(
             CaptureEvent.PictureFailed -> _state.update { it.copy(isCapturing = false) }
             CaptureEvent.CycleFlash -> updateSettings { it.copy(flash = it.flash.next()) }
             CaptureEvent.ToggleAuto -> updateSettings { it.copy(autoCapture = !it.autoCapture) }
-            is CaptureEvent.SetBatch -> {
-                if (event.on) batchHintUntilMs = clock.millis() + BATCH_HINT_MS
-                updateSettings { it.copy(batchMode = event.on) }
+            is CaptureEvent.SetMode -> {
+                if (event.mode == CaptureMode.BATCH) batchHintUntilMs = clock.millis() + BATCH_HINT_MS
+                // Switching away mid-card leaves the front as a card of its own (saved with one side).
+                setCardGroup(null)
+                updateSettings { it.copy(captureMode = event.mode) }
             }
             is CaptureEvent.Imported -> onImported(event.uris)
             CaptureEvent.OpenReview -> sessionId.value?.let { if (_state.value.captureCount > 0) send(CaptureEffect.OpenReview(it)) }
@@ -203,7 +210,9 @@ class CaptureViewModel @Inject constructor(
         val auto = s.settings.autoCapture
         return when {
             !s.detectorAvailable -> CaptureHint.NO_DETECTOR
-            s.settings.batchMode && s.captureCount == 0 && now < batchHintUntilMs -> CaptureHint.BATCH
+            s.settings.captureMode == CaptureMode.ID_CARD -> if (s.awaitingCardBack) CaptureHint.CARD_BACK else CaptureHint.CARD_FRONT
+            s.settings.captureMode == CaptureMode.BOOK && d is AutoCaptureState.Searching -> CaptureHint.BOOK
+            s.settings.captureMode == CaptureMode.BATCH && s.captureCount == 0 && now < batchHintUntilMs -> CaptureHint.BATCH
             d is AutoCaptureState.Searching && now - searchingSinceMs > 5_000 -> CaptureHint.TIP
             d is AutoCaptureState.Searching && now - searchingSinceMs > 1_500 -> CaptureHint.LOOKING
             d is AutoCaptureState.Tracking && auto -> CaptureHint.HOLD
@@ -234,14 +243,25 @@ class CaptureViewModel @Inject constructor(
     private fun onPictureTaken(path: String) {
         val session = sessionId.value ?: return
         val liveQuad = quadAtShutter
-        val batch = _state.value.settings.batchMode
+        val mode = _state.value.settings.captureMode
+        // NV-11: the front opens a card; the back closes it and the pair goes to Review.
+        val cardGroup = savedState.get<String>(KEY_CARD_GROUP)
+        val (kind, group) = when (mode) {
+            CaptureMode.ID_CARD -> if (cardGroup == null) CaptureKind.ID_FRONT to UUID.randomUUID().toString() else CaptureKind.ID_BACK to cardGroup
+            CaptureMode.BOOK -> CaptureKind.BOOK_SPREAD to null
+            else -> CaptureKind.PAGE to null
+        }
+        if (mode == CaptureMode.ID_CARD) setCardGroup(if (kind == CaptureKind.ID_FRONT) group else null)
         viewModelScope.launch {
-            val captureId = addCapture(session, ImageInput.FilePath(path), liveQuad)
+            val captureId = addCapture(session, ImageInput.FilePath(path), liveQuad, kind, group)
             // Never block the next shot for longer than the debounce window (FR-18).
             val wait = MIN_SHUTTER_INTERVAL_MS - (clock.millis() - capturingSinceMs)
             if (wait > 0) delay(wait)
             _state.update { it.copy(isCapturing = false) }
-            if (!batch) send(CaptureEffect.OpenCrop(session, captureId))
+            when {
+                mode == CaptureMode.SINGLE -> send(CaptureEffect.OpenCrop(session, captureId))
+                kind == CaptureKind.ID_BACK -> send(CaptureEffect.OpenReview(session))
+            }
         }
     }
 
@@ -269,6 +289,11 @@ class CaptureViewModel @Inject constructor(
         }
     }
 
+    private fun setCardGroup(group: String?) {
+        savedState[KEY_CARD_GROUP] = group
+        _state.update { it.copy(awaitingCardBack = group != null) }
+    }
+
     private fun updateSettings(transform: (AppSettings) -> AppSettings) {
         viewModelScope.launch { settingsRepo.update(transform) }
     }
@@ -279,6 +304,7 @@ class CaptureViewModel @Inject constructor(
 
     private companion object {
         const val KEY_SESSION = "sessionId"
+        const val KEY_CARD_GROUP = "cardGroup"
         const val MIN_SHUTTER_INTERVAL_MS = 250L
         const val BATCH_HINT_MS = 3_000L
     }

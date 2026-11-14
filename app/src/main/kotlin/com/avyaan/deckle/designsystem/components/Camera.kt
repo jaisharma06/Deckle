@@ -1,5 +1,6 @@
 package com.avyaan.deckle.designsystem.components
 
+import com.avyaan.deckle.domain.settings.CaptureMode
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.VectorConverter
@@ -123,11 +124,16 @@ fun ShutterButton(progress: Float, enabled: Boolean, onClick: () -> Unit, modifi
 
 /** FR-11 Single · Batch, with a sliding indicator under the active option. */
 @Composable
-fun ModeToggle(batch: Boolean, onChange: (Boolean) -> Unit, modifier: Modifier = Modifier) {
-    val options = listOf(false to R.string.capture_mode_single, true to R.string.capture_mode_batch)
+fun ModeToggle(mode: CaptureMode, onChange: (CaptureMode) -> Unit, modifier: Modifier = Modifier) {
+    val options = listOf(
+        CaptureMode.SINGLE to R.string.capture_mode_single,
+        CaptureMode.BATCH to R.string.capture_mode_batch,
+        CaptureMode.ID_CARD to R.string.capture_mode_id_card,
+        CaptureMode.BOOK to R.string.capture_mode_book,
+    )
     Row(modifier.selectableGroup(), verticalAlignment = Alignment.CenterVertically) {
         options.forEach { (value, label) ->
-            val selected = value == batch
+            val selected = value == mode
             val alpha by animateFloatAsState(if (selected) 1f else 0.6f, deckleTween(DeckleMotion.MEDIUM), label = "a")
             val underline by animateDpAsState(if (selected) 18.dp else 0.dp, deckleSpring(DeckleMotion.Spring.Pop), label = "u")
             Box(

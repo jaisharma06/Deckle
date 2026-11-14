@@ -8,6 +8,8 @@ import com.avyaan.deckle.domain.geometry.ImageSize
 import com.avyaan.deckle.domain.imaging.Adjustments
 import com.avyaan.deckle.domain.imaging.EnhancementMode
 import com.avyaan.deckle.domain.imaging.PageEnhancer
+import com.avyaan.deckle.domain.settings.SettingsRepository
+import kotlinx.coroutines.flow.first
 import javax.inject.Inject
 import kotlinx.coroutines.withContext
 import org.opencv.core.Core
@@ -25,16 +27,20 @@ import org.opencv.imgproc.Imgproc
 public class OpenCvPageEnhancer @Inject constructor(
     private val filters: Map<EnhancementMode, @JvmSuppressWildcards EnhancementFilter>,
     private val dispatchers: DispatcherProvider,
+    private val settings: SettingsRepository,
 ) : PageEnhancer {
 
+    /** NV-13: read per render, so the switch applies to the next edit without a restart. */
+    private suspend fun fingers(mode: EnhancementMode) = mode in FingerRemover.MODES && settings.settings.first().removeFingers
+
     override suspend fun enhance(basePath: String, mode: EnhancementMode, adjustments: Adjustments, out: String): Outcome<ImageSize> =
-        guarded(dispatchers) { render(basePath, mode, adjustments, out, longEdge = null, quality = PROCESSED_QUALITY) }
+        guarded(dispatchers) { render(basePath, mode, adjustments, out, longEdge = null, quality = PROCESSED_QUALITY, removeFingers = fingers(mode)) }
 
     /** FR-32: same chain on a downscaled copy, on the preview dispatcher so it doesn't queue behind full-res work. */
     override suspend fun preview(basePath: String, mode: EnhancementMode, adjustments: Adjustments, longEdge: Int, out: String): Outcome<String> =
         withContext(dispatchers.preview) {
             try {
-                when (val r = render(basePath, mode, adjustments, out, longEdge, PREVIEW_QUALITY)) {
+                when (val r = render(basePath, mode, adjustments, out, longEdge, PREVIEW_QUALITY, fingers(mode))) {
                     is Outcome.Success -> Outcome.Success(out)
                     is Outcome.Failure -> r
                 }
@@ -58,12 +64,15 @@ public class OpenCvPageEnhancer @Inject constructor(
         }
     }
 
-    private fun render(basePath: String, mode: EnhancementMode, adj: Adjustments, out: String, longEdge: Int?, quality: Int): Outcome<ImageSize> =
+    private fun render(
+        basePath: String, mode: EnhancementMode, adj: Adjustments, out: String, longEdge: Int?, quality: Int, removeFingers: Boolean,
+    ): Outcome<ImageSize> =
         matScope {
             val filter = filters.getValue(mode)
             val loaded = Imgcodecs.imread(basePath, Imgcodecs.IMREAD_COLOR).track()
             if (loaded.empty()) return@matScope Outcome.Failure(DeckleError.ImageDecodeFailed)
-            val base = longEdge?.let { downscale(loaded, it) } ?: loaded
+            val scaled = longEdge?.let { downscale(loaded, it) } ?: loaded
+            val base = if (removeFingers) FingerRemover.apply(this, scaled) else scaled
 
             // Decided on the full page even for previews, so a thumbnail never disagrees with the result.
             val paper = filter.input != EnhancementFilter.Input.RAW && PaperDetector.looksLikePaper(this, loaded)
