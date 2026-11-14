@@ -206,6 +206,7 @@ private fun CaptureScreen(
         }
     }
     LaunchedEffect(state.settings.flash) { controller.setFlash(state.settings.flash) }
+    val shutter = rememberShutterSound()
 
     // "Page detected" for TalkBack when the outline settles (spec 05 §8).
     val stable = state.detection is AutoCaptureState.Holding
@@ -216,6 +217,7 @@ private fun CaptureScreen(
         when (effect) {
             CaptureEffect.TakePicture -> {
                 haptics.confirm()
+                shutter.play(vm.state.value.settings.shutterSound)
                 scope.launch {
                     flashOverlay.snapTo(0.6f)
                     flashOverlay.animateTo(0f, tween(DeckleMotion.SHORT))
@@ -475,3 +477,23 @@ private const val MAX_IMPORT = 50
 
 /** Portrait 3:4, matching the ViewPort in [CameraController]. */
 private const val PREVIEW_ASPECT = 3f / 4f
+
+/** NV-05: the system shutter click, loaded once per screen. */
+private class ShutterSound {
+    private val sound = android.media.MediaActionSound().apply { load(android.media.MediaActionSound.SHUTTER_CLICK) }
+
+    /** Plays when [wanted], or always where the region requires a shutter sound (API 33+ can tell us). */
+    fun play(wanted: Boolean) {
+        val required = android.os.Build.VERSION.SDK_INT >= 33 && android.media.MediaActionSound.mustPlayShutterSound()
+        if (wanted || required) sound.play(android.media.MediaActionSound.SHUTTER_CLICK)
+    }
+
+    fun release() = sound.release()
+}
+
+@Composable
+private fun rememberShutterSound(): ShutterSound {
+    val shutter = remember { ShutterSound() }
+    androidx.compose.runtime.DisposableEffect(shutter) { onDispose { shutter.release() } }
+    return shutter
+}

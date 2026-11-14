@@ -1,6 +1,21 @@
 package com.avyaan.deckle.feature.review
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import com.avyaan.deckle.designsystem.components.SelectionCheck
+import com.avyaan.deckle.designsystem.theme.deckleSpring
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.expandVertically
@@ -103,29 +118,47 @@ fun ReviewRoute(
             is ReviewEffect.Finished -> { haptics.confirm(); onFinished(effect.documentId) }
             ReviewEffect.Discarded -> onDiscarded()
             is ReviewEffect.Message -> snackbar.showSnackbar(effect.text.resolve(context))
-            is ReviewEffect.PageDeleted -> scope.launch {
+            is ReviewEffect.PagesDeleted -> scope.launch {
                 snackbar.currentSnackbarData?.dismiss()
+                val n = effect.captureIds.size
                 val result = snackbar.showSnackbar(
-                    resources.getString(R.string.review_page_deleted),
+                    if (n == 1) resources.getString(R.string.review_page_deleted) else resources.getQuantityString(R.plurals.review_pages_deleted, n, n),
                     actionLabel = resources.getString(R.string.action_undo),
                     duration = SnackbarDuration.Long,
                 )
-                vm.onEvent(if (result == SnackbarResult.ActionPerformed) ReviewEvent.UndoDelete(effect.captureId) else ReviewEvent.ConfirmDelete(effect.captureId))
+                vm.onEvent(if (result == SnackbarResult.ActionPerformed) ReviewEvent.UndoDelete(effect.captureIds) else ReviewEvent.ConfirmDelete(effect.captureIds))
             }
         }
     }
     SecureWindow(state.secure)
+    BackHandler(state.selecting) { vm.onEvent(ReviewEvent.SetSelecting(false)) }
 
     CameraTheme {
         Box(Modifier.fillMaxSize().background(Color.Black)) {
             Column(Modifier.fillMaxSize()) {
-                TopRow(state, onBack, onDelete = { haptics.confirm(); vm.onEvent(ReviewEvent.DeletePage) })
-                if (state.pages.isNotEmpty()) {
-                    PagePager(state, Modifier.weight(1f)) { vm.onEvent(ReviewEvent.PageChanged(it)) }
-                } else {
-                    Spacer(Modifier.weight(1f))
+                AnimatedContent(state.selecting, transitionSpec = { fadeIn() togetherWith fadeOut() }, label = "bar") { selecting ->
+                    if (selecting) {
+                        SelectionTopRow(
+                            state,
+                            onClose = { vm.onEvent(ReviewEvent.SetSelecting(false)) },
+                            onSelectAll = { haptics.tick(); vm.onEvent(ReviewEvent.SelectAll) },
+                            onDelete = { haptics.confirm(); vm.onEvent(ReviewEvent.DeleteSelected) },
+                        )
+                    } else {
+                        TopRow(
+                            state, onBack,
+                            onSelect = { haptics.select(); vm.onEvent(ReviewEvent.SetSelecting(true)) },
+                            onDelete = { haptics.confirm(); vm.onEvent(ReviewEvent.DeletePage) },
+                        )
+                    }
                 }
-                Controls(state, vm::onEvent, onTick = haptics::tick)
+                when {
+                    state.pages.isEmpty() -> Spacer(Modifier.weight(1f))
+                    state.selecting -> SelectionGrid(state, Modifier.weight(1f)) { haptics.tick(); vm.onEvent(ReviewEvent.ToggleSelect(it)) }
+                    else -> PagePager(state, Modifier.weight(1f)) { vm.onEvent(ReviewEvent.PageChanged(it)) }
+                }
+                if (state.selecting) SelectionControls(state, vm::onEvent, onTick = haptics::tick)
+                else Controls(state, vm::onEvent, onTick = haptics::tick)
             }
             SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = 180.dp))
         }
@@ -133,12 +166,15 @@ fun ReviewRoute(
 }
 
 @Composable
-private fun TopRow(state: ReviewUiState, onBack: () -> Unit, onDelete: () -> Unit) {
+private fun TopRow(state: ReviewUiState, onBack: () -> Unit, onSelect: () -> Unit, onDelete: () -> Unit) {
     Column(Modifier.fillMaxWidth().statusBarsPadding()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = Spacing.xs), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(DeckleIcons.Back, stringResource(R.string.action_back), tint = Color.White) }
             AnimatedContent(state.currentIndex to state.pages.size, transitionSpec = { fadeIn() togetherWith fadeOut() }, label = "pos", modifier = Modifier.weight(1f)) { (i, n) ->
                 if (n > 0) Text(stringResource(R.string.review_page_of, i + 1, n), style = MaterialTheme.typography.titleMedium, color = Color.White)
+            }
+            if (state.pages.size > 1) {
+                IconButton(onClick = onSelect) { Icon(DeckleIcons.Grid, stringResource(R.string.review_select_pages), tint = Color.White) }
             }
             IconButton(onClick = onDelete, enabled = state.current != null) {
                 Icon(DeckleIcons.Delete, stringResource(R.string.review_delete_page), tint = Color.White)
@@ -285,6 +321,112 @@ private fun RowScope.ToolButton(
                 softWrap = false,
                 overflow = TextOverflow.Ellipsis,
             )
+        }
+    }
+}
+
+@Composable
+private fun SelectionTopRow(state: ReviewUiState, onClose: () -> Unit, onSelectAll: () -> Unit, onDelete: () -> Unit) {
+    val canSelectMore = state.selection.size < state.pages.size
+    val canDelete = state.selection.isNotEmpty()
+    Column(Modifier.fillMaxWidth().statusBarsPadding()) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = Spacing.xs), verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onClose) { Icon(DeckleIcons.Close, stringResource(R.string.action_close), tint = Color.White) }
+            Text(
+                pluralStringResource(R.plurals.library_selected, state.selection.size, state.selection.size),
+                style = MaterialTheme.typography.titleMedium,
+                color = Color.White,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = onSelectAll, enabled = canSelectMore) {
+                Text(stringResource(R.string.action_select_all), color = if (canSelectMore) CameraColors.Ring else Color.White.copy(alpha = 0.4f))
+            }
+            IconButton(onClick = onDelete, enabled = canDelete) {
+                Icon(DeckleIcons.Delete, stringResource(R.string.action_delete), tint = if (canDelete) Color.White else Color.White.copy(alpha = 0.4f))
+            }
+        }
+        Spacer(Modifier.height(2.dp))
+    }
+}
+
+/** NV-01: every page of the scan at once; tap to pick. */
+@Composable
+private fun SelectionGrid(state: ReviewUiState, modifier: Modifier, onToggle: (String) -> Unit) {
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(3),
+        contentPadding = PaddingValues(Spacing.l),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.m),
+        verticalArrangement = Arrangement.spacedBy(Spacing.l),
+        modifier = modifier.fillMaxWidth(),
+    ) {
+        items(state.pages, key = { it.id }) { page ->
+            val index = state.pages.indexOf(page)
+            val selected = page.id in state.selection
+            val turn by animateFloatAsState(page.pendingTurns * 90f, deckleTween(DeckleMotion.MEDIUM), label = "turn")
+            val shrink by animateFloatAsState(if (selected) 0.92f else 1f, deckleSpring(DeckleMotion.Spring.Pop), label = "pick")
+            val label = stringResource(R.string.cd_page_number, index + 1)
+            Column(Modifier.animateItem(), horizontalAlignment = Alignment.CenterHorizontally) {
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(0.77f)
+                        .graphicsLayer { scaleX = shrink; scaleY = shrink }
+                        .clip(MaterialTheme.shapes.small)
+                        .background(Color.White.copy(alpha = 0.08f))
+                        .then(if (selected) Modifier.border(3.dp, CameraColors.Ring, MaterialTheme.shapes.small) else Modifier)
+                        .semantics { contentDescription = label; this.selected = selected }
+                        .clickable { onToggle(page.id) },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (page.displayPath != null) {
+                        AsyncImage(
+                            model = File(page.displayPath),
+                            contentDescription = null,
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier.fillMaxSize().padding(Spacing.xs).graphicsLayer { rotationZ = turn },
+                        )
+                    } else {
+                        Box(Modifier.fillMaxSize().shimmer())
+                    }
+                    androidx.compose.animation.AnimatedVisibility(
+                        selected,
+                        enter = scaleIn(deckleSpring(DeckleMotion.Spring.Pop)) + fadeIn(),
+                        exit = scaleOut() + fadeOut(),
+                    ) { SelectionCheck() }
+                }
+                Text(
+                    (index + 1).toString(),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = Color.White.copy(alpha = 0.7f),
+                    modifier = Modifier.padding(top = Spacing.xs),
+                )
+            }
+        }
+    }
+}
+
+/** Filter and rotate for the selected pages. Dimmed until something is selected. */
+@Composable
+private fun SelectionControls(state: ReviewUiState, onEvent: (ReviewEvent) -> Unit, onTick: () -> Unit) {
+    val current = state.current ?: return
+    val enabled = state.selection.isNotEmpty()
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .background(CameraColors.Chrome)
+            .navigationBarsPadding()
+            .padding(top = Spacing.m, bottom = Spacing.m)
+            .graphicsLayer { alpha = if (enabled) 1f else 0.4f },
+    ) {
+        FilterStrip(
+            selected = state.selectionMode ?: current.mode,
+            thumbs = state.filterThumbs,
+            onSelect = { if (enabled) { onTick(); onEvent(ReviewEvent.FilterSelected(it)) } },
+            contentColor = Color.White,
+        )
+        Spacer(Modifier.height(Spacing.s))
+        Row(Modifier.fillMaxWidth().padding(horizontal = Spacing.s), verticalAlignment = Alignment.CenterVertically) {
+            ToolButton(DeckleIcons.RotateRight, R.string.review_rotate) { if (enabled) { onTick(); onEvent(ReviewEvent.RotateSelected) } }
         }
     }
 }

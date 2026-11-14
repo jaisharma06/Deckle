@@ -28,6 +28,9 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.ImmutableMap
+import kotlinx.collections.immutable.ImmutableSet
+import kotlinx.collections.immutable.persistentSetOf
+import kotlinx.collections.immutable.toImmutableSet
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.persistentMapOf
 import kotlinx.collections.immutable.toImmutableList
@@ -69,8 +72,15 @@ data class ReviewUiState(
     val canFinish: Boolean = false,
     val committing: Boolean = false,
     val secure: Boolean = true,
+    /** NV-01: picking several pages to delete, rotate or re-filter together. */
+    val selecting: Boolean = false,
+    val selection: ImmutableSet<String> = persistentSetOf(),
 ) {
     val current: ReviewPageUi? get() = pages.getOrNull(currentIndex)
+
+    /** The mode shared by every selected page, else the current page's, so the strip shows something sensible. */
+    val selectionMode: EnhancementMode?
+        get() = pages.filter { it.id in selection }.map { it.mode }.distinct().singleOrNull()
 }
 
 sealed interface ReviewEvent {
@@ -85,8 +95,14 @@ sealed interface ReviewEvent {
     data object Rotate : ReviewEvent
     data object Crop : ReviewEvent
     data object DeletePage : ReviewEvent
-    data class UndoDelete(val captureId: String) : ReviewEvent
-    data class ConfirmDelete(val captureId: String) : ReviewEvent
+    data class UndoDelete(val captureIds: List<String>) : ReviewEvent
+    data class ConfirmDelete(val captureIds: List<String>) : ReviewEvent
+    data class SetSelecting(val on: Boolean) : ReviewEvent
+    data class ToggleSelect(val captureId: String) : ReviewEvent
+    data object SelectAll : ReviewEvent
+    data object DeleteSelected : ReviewEvent
+    data object RotateSelected : ReviewEvent
+    data class FilterSelected(val mode: EnhancementMode) : ReviewEvent
     data object AddPage : ReviewEvent
     data object Done : ReviewEvent
 }
@@ -94,7 +110,8 @@ sealed interface ReviewEvent {
 sealed interface ReviewEffect {
     data class OpenCrop(val sessionId: String, val captureId: String) : ReviewEffect
     data class OpenCapture(val sessionId: String) : ReviewEffect
-    data class PageDeleted(val captureId: String) : ReviewEffect
+    /** One or more pages were hidden; the screen offers Undo, then confirms. */
+    data class PagesDeleted(val captureIds: List<String>) : ReviewEffect
     data class Finished(val documentId: String) : ReviewEffect
     data object Discarded : ReviewEffect
     data class Message(val text: UiText) : ReviewEffect
@@ -157,6 +174,8 @@ class ReviewViewModel @Inject constructor(
             canFinish = visible.isNotEmpty() && visible.all { it.status == StagedStatus.READY },
             committing = local.committing,
             secure = s.secureScreens,
+            selecting = local.selecting,
+            selection = local.selection.filterTo(LinkedHashSet()) { id -> visible.any { it.id == id } }.toImmutableSet(),
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ReviewUiState())
 
@@ -192,24 +211,39 @@ class ReviewViewModel @Inject constructor(
                 viewModelScope.launch { edit.setFilterForAll(sessionId, c.mode, c.adjustments) }
             }
             ReviewEvent.Rotate -> current()?.let { c ->
-                val pending = state.value.current?.pendingTurns ?: 0
-                ui.update { it.copy(turns = it.turns + (c.id to pending + 1), turnsAtRevision = it.turnsAtRevision + (c.id to c.revision)) }
+                turnOptimistically(listOf(c.id))
                 viewModelScope.launch { edit.rotate(sessionId, c.id, clockwise = true) }
             }
             ReviewEvent.Crop -> current()?.let { send(ReviewEffect.OpenCrop(sessionId, it.id)) }
-            ReviewEvent.DeletePage -> current()?.let { c ->
-                // Hidden at once; really removed only when the Undo snackbar goes away (spec 05 §5).
-                ui.update { it.copy(hidden = it.hidden + c.id) }
-                send(ReviewEffect.PageDeleted(c.id))
-            }
-            is ReviewEvent.UndoDelete -> ui.update { it.copy(hidden = it.hidden - event.captureId) }
+            ReviewEvent.DeletePage -> current()?.let { c -> hide(listOf(c.id)) }
+            is ReviewEvent.UndoDelete -> ui.update { it.copy(hidden = it.hidden - event.captureIds.toSet()) }
             is ReviewEvent.ConfirmDelete -> appScope.launch {
-                removeCapture(sessionId, event.captureId)
-                ui.update { it.copy(hidden = it.hidden - event.captureId) }
+                event.captureIds.forEach { removeCapture(sessionId, it) }
+                ui.update { it.copy(hidden = it.hidden - event.captureIds.toSet()) }
                 if (sessions.get(sessionId)?.captures.isNullOrEmpty()) {
                     discard(sessionId)
                     send(ReviewEffect.Discarded)
                 }
+            }
+            is ReviewEvent.SetSelecting -> ui.update { it.copy(selecting = event.on, selection = emptySet()) }
+            is ReviewEvent.ToggleSelect -> ui.update {
+                val sel = if (event.captureId in it.selection) it.selection - event.captureId else it.selection + event.captureId
+                it.copy(selecting = true, selection = sel)
+            }
+            ReviewEvent.SelectAll -> ui.update { it.copy(selection = state.value.pages.map { p -> p.id }.toSet()) }
+            ReviewEvent.DeleteSelected -> {
+                val ids = selectedInOrder()
+                ui.update { it.copy(selecting = false, selection = emptySet()) }
+                if (ids.isNotEmpty()) hide(ids)
+            }
+            ReviewEvent.RotateSelected -> selectedInOrder().takeIf { it.isNotEmpty() }?.let { ids ->
+                turnOptimistically(ids)
+                viewModelScope.launch { edit.rotateAll(sessionId, ids.toSet(), clockwise = true) }
+            }
+            is ReviewEvent.FilterSelected -> selectedInOrder().takeIf { it.isNotEmpty() }?.let { ids ->
+                // Drop quick previews of those pages so the old filter doesn't linger until their render lands.
+                ui.update { it.copy(previews = it.previews - ids.toSet()) }
+                viewModelScope.launch { edit.setModeFor(sessionId, ids.toSet(), event.mode) }
             }
             ReviewEvent.AddPage -> send(ReviewEffect.OpenCapture(sessionId))
             ReviewEvent.Done -> finish()
@@ -223,6 +257,29 @@ class ReviewViewModel @Inject constructor(
     override fun onCleared() {
         val pending = ui.value.hidden
         if (pending.isNotEmpty()) appScope.launch { pending.forEach { removeCapture(sessionId, it) } }
+    }
+
+    /** Hidden at once; really removed only when the Undo snackbar goes away (spec 05 §5). */
+    private fun hide(ids: List<String>) {
+        ui.update { it.copy(hidden = it.hidden + ids) }
+        send(ReviewEffect.PagesDeleted(ids))
+    }
+
+    private fun selectedInOrder(): List<String> {
+        val sel = ui.value.selection
+        return state.value.pages.map { it.id }.filter { it in sel }
+    }
+
+    /** The image turns at once; the turn settles when a render newer than this request is READY. */
+    private fun turnOptimistically(ids: List<String>) {
+        val pending = state.value.pages.associate { it.id to it.pendingTurns }
+        val revisions = ids.mapNotNull { id -> latestSession?.capture(id)?.let { id to it.revision } }
+        ui.update { l ->
+            l.copy(
+                turns = l.turns + ids.map { it to (pending[it] ?: 0) + 1 },
+                turnsAtRevision = l.turnsAtRevision + revisions,
+            )
+        }
     }
 
     private fun current(): StagedCapture? {
@@ -324,6 +381,8 @@ class ReviewViewModel @Inject constructor(
         val turnsAtRevision: Map<String, Int> = emptyMap(),
         val previewBusy: Boolean = false,
         val committing: Boolean = false,
+        val selecting: Boolean = false,
+        val selection: Set<String> = emptySet(),
     )
 
     private companion object {

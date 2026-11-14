@@ -61,6 +61,8 @@ data class LibraryUiState(
     val content: LibraryContent = LibraryContent.Loading,
     val query: String = "",
     val sort: SortOrder = SortOrder.CREATED_DESC,
+    /** NV-04: show only documents with recognised text. */
+    val textOnly: Boolean = false,
     val layout: LibraryLayout = LibraryLayout.GRID,
     val selection: ImmutableSet<String> = persistentSetOf(),
     val folderSelection: ImmutableSet<String> = persistentSetOf(),
@@ -87,6 +89,8 @@ sealed interface LibraryContent {
     /** An empty folder. */
     data object FolderEmpty : LibraryContent
     data class NoResults(val query: String) : LibraryContent
+    /** The "Has text" filter is on and nothing here has text. */
+    data object NoText : LibraryContent
     data class Items(val folders: ImmutableList<FolderItem>, val documents: ImmutableList<LibraryItem>) : LibraryContent
 }
 
@@ -98,6 +102,7 @@ data class FolderItem(val id: String, val name: String, val documentCount: Int, 
 sealed interface LibraryEvent {
     data class QueryChanged(val q: String) : LibraryEvent
     data class SortChanged(val s: SortOrder) : LibraryEvent
+    data class TextOnlyChanged(val on: Boolean) : LibraryEvent
     data class LayoutChanged(val layout: LibraryLayout) : LibraryEvent
     data class CardClicked(val id: String) : LibraryEvent
     data class CardLongPressed(val id: String) : LibraryEvent
@@ -155,6 +160,7 @@ class LibraryViewModel @Inject constructor(
     val folderId: String? = savedState.get<String>(KEY_FOLDER)
 
     private val query: StateFlow<String> = savedState.getStateFlow(KEY_QUERY, "")
+    private val textOnly: StateFlow<Boolean> = savedState.getStateFlow(KEY_TEXT_ONLY, false)
     private val selection: StateFlow<List<String>> = savedState.getStateFlow(KEY_SELECTION, emptyList())
     private val folderSelection: StateFlow<List<String>> = savedState.getStateFlow(KEY_FOLDER_SELECTION, emptyList())
     private val resumable = MutableStateFlow<ResumableSessionUi?>(null)
@@ -173,20 +179,25 @@ class LibraryViewModel @Inject constructor(
         .flatMapLatest { q -> observeLibrary(q, folderId).map { q to it } }
 
     val state: StateFlow<LibraryUiState> = combine(
-        listing, query, combine(selection, folderSelection, ::Pair), settings.settings, combine(resumable, highlight, ::Pair),
-    ) { (q, list), rawQuery, (sel, folderSel), s, (resume, glow) ->
+        listing, combine(query, textOnly, ::Pair), combine(selection, folderSelection, ::Pair), settings.settings, combine(resumable, highlight, ::Pair),
+    ) { (q, list), (rawQuery, onlyText), (sel, folderSel), s, (resume, glow) ->
         latest = list
-        val folders = list.folders.map { FolderItem(it.folder.id, it.folder.name, it.documentCount, it.folderCount, it.folder.dateFor(s.sortOrder)) }
+        // The filter chip sits beside the sort chip, which hides while searching; so does the filter.
+        val filtering = onlyText && q.isBlank()
+        val folders = if (filtering) emptyList() else list.folders.map { FolderItem(it.folder.id, it.folder.name, it.documentCount, it.folderCount, it.folder.dateFor(s.sortOrder)) }
+        val documents = if (filtering) list.documents.filter { it.hasText } else list.documents
         LibraryUiState(
             content = when {
-                folders.isNotEmpty() || list.documents.isNotEmpty() ->
-                    LibraryContent.Items(folders.toImmutableList(), list.documents.map { it.toItem(s.sortOrder) }.toImmutableList())
+                folders.isNotEmpty() || documents.isNotEmpty() ->
+                    LibraryContent.Items(folders.toImmutableList(), documents.map { it.toItem(s.sortOrder) }.toImmutableList())
+                filtering && list.documents.isNotEmpty() -> LibraryContent.NoText
                 q.isNotBlank() -> LibraryContent.NoResults(q)
                 folderId != null -> LibraryContent.FolderEmpty
                 else -> LibraryContent.Empty
             },
             query = rawQuery,
             sort = s.sortOrder,
+            textOnly = onlyText,
             layout = s.libraryLayout,
             selection = sel.toPersistentSet(),
             folderSelection = folderSel.toPersistentSet(),
@@ -216,6 +227,7 @@ class LibraryViewModel @Inject constructor(
         when (event) {
             is LibraryEvent.QueryChanged -> savedState[KEY_QUERY] = event.q
             is LibraryEvent.SortChanged -> viewModelScope.launch { settings.update { it.copy(sortOrder = event.s) } }
+            is LibraryEvent.TextOnlyChanged -> savedState[KEY_TEXT_ONLY] = event.on
             is LibraryEvent.LayoutChanged -> viewModelScope.launch { settings.update { it.copy(libraryLayout = event.layout) } }
             is LibraryEvent.CardClicked ->
                 if (selecting()) toggle(KEY_SELECTION, event.id) else send(LibraryEffect.OpenDocument(event.id))
@@ -387,6 +399,7 @@ class LibraryViewModel @Inject constructor(
         /** Route argument name of [com.avyaan.deckle.navigation.FolderDest]. */
         const val KEY_FOLDER = "folderId"
         private const val KEY_QUERY = "query"
+        private const val KEY_TEXT_ONLY = "text_only"
         private const val KEY_SELECTION = "selection"
         private const val KEY_FOLDER_SELECTION = "folderSelection"
         private const val SEARCH_DEBOUNCE_MS = 200L

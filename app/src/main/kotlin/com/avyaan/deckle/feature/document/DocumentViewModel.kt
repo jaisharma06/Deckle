@@ -68,6 +68,7 @@ sealed interface DocumentEvent {
     data class SetCover(val pageId: String) : DocumentEvent
     data class RetryOcr(val pageId: String) : DocumentEvent
     data class RenamePage(val pageId: String, val name: String) : DocumentEvent
+    data class DuplicatePage(val pageId: String) : DocumentEvent
     data class CropPage(val pageId: String) : DocumentEvent
     data object CopyText : DocumentEvent
     data object AddPages : DocumentEvent
@@ -102,6 +103,7 @@ class DocumentViewModel @Inject constructor(
     private val moveToTrash: MoveToTrashUseCase,
     private val deletePage: DeletePageUseCase,
     private val renamePage: RenamePageUseCase,
+    private val duplicatePage: com.avyaan.deckle.domain.page.DuplicatePageUseCase,
 ) : ViewModel() {
 
     private val route = savedState.toRoute<DocumentDest>()
@@ -170,6 +172,10 @@ class DocumentViewModel @Inject constructor(
             is DocumentEvent.SetCover -> viewModelScope.launch { setCover(documentId, event.pageId) }
             is DocumentEvent.RetryOcr -> viewModelScope.launch { retryOcr(event.pageId) }
             is DocumentEvent.RenamePage -> viewModelScope.launch { renamePage(event.pageId, event.name) }
+            is DocumentEvent.DuplicatePage -> viewModelScope.launch {
+                val ok = runCatching { duplicatePage(event.pageId) }.getOrNull() != null
+                send(DocumentEffect.Message(UiText.Res(if (ok) R.string.page_duplicated else R.string.error_generic)))
+            }
             is DocumentEvent.CropPage -> {
                 val page = state.value.pages.firstOrNull { it.id == event.pageId } ?: return
                 if (page.hasSource) send(DocumentEffect.OpenRecrop(page.id))

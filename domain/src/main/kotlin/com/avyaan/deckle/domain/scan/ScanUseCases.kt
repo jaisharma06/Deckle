@@ -89,10 +89,31 @@ public class EditCaptureUseCase @Inject constructor(
 
     /** "Apply to all" (UX addition D-10). */
     public suspend fun setFilterForAll(sessionId: String, mode: EnhancementMode, adjustments: Adjustments) {
+        editMany(sessionId, null) { it.copy(mode = mode, adjustments = adjustments) }
+    }
+
+    /**
+     * Multi-select in review (NV-01): one filter mode for the chosen pages, in a single session update.
+     * Each page keeps its own brightness/contrast adjustments.
+     */
+    public suspend fun setModeFor(sessionId: String, captureIds: Set<String>, mode: EnhancementMode) {
+        editMany(sessionId, captureIds) { it.copy(mode = mode) }
+    }
+
+    /** Multi-select in review (NV-01): a quarter turn for each chosen page. */
+    public suspend fun rotateAll(sessionId: String, captureIds: Set<String>, clockwise: Boolean) {
+        editMany(sessionId, captureIds) { it.copy(rotation = if (clockwise) it.rotation.clockwise() else it.rotation.counterClockwise()) }
+    }
+
+    /** [ids] null means every page. */
+    private suspend fun editMany(sessionId: String, ids: Set<String>?, change: (StagedCapture) -> StagedCapture) {
+        if (ids != null && ids.isEmpty()) return
         val updated = store.update(sessionId) { s ->
-            s.copy(captures = s.captures.map { it.copy(mode = mode, adjustments = adjustments, status = pendingStatus(it)) })
+            s.copy(captures = s.captures.map { if (ids == null || it.id in ids) change(it).copy(status = pendingStatus(it)) else it })
         } ?: return
-        updated.captures.filterNot { it.awaitingNormalize }.forEach { queue.submit(ProcessingQueue.Job.Render(sessionId, it.id)) }
+        updated.captures
+            .filter { (ids == null || it.id in ids) && !it.awaitingNormalize }
+            .forEach { queue.submit(ProcessingQueue.Job.Render(sessionId, it.id)) }
     }
 
     private suspend fun edit(sessionId: String, captureId: String, change: (StagedCapture) -> StagedCapture) {

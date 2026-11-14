@@ -13,7 +13,8 @@ private const val SUMMARY_COLUMNS = """
     COALESCE(
         (SELECT thumbPath FROM pages WHERE id = d.coverPageId),
         (SELECT thumbPath FROM pages WHERE documentId = d.id ORDER BY orderIndex LIMIT 1)
-    ) AS coverThumbPath
+    ) AS coverThumbPath,
+    EXISTS(SELECT 1 FROM pages p WHERE p.documentId = d.id AND LENGTH(TRIM(p.ocrPlainText)) > 0) AS hasText
 """
 
 @Dao

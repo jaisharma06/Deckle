@@ -54,6 +54,8 @@ public class DataStoreSettingsRepository @Inject constructor(
             saveOriginals = p[Keys.SAVE_ORIGINALS] ?: d.saveOriginals,
             secureScreens = p[Keys.SECURE] ?: d.secureScreens,
             hasSeenCaptureTips = p[Keys.TIPS_SEEN] ?: d.hasSeenCaptureTips,
+            shutterSound = p[Keys.SHUTTER_SOUND] ?: d.shutterSound,
+            vibration = p[Keys.VIBRATION] ?: d.vibration,
         )
     }
 
@@ -69,6 +71,8 @@ public class DataStoreSettingsRepository @Inject constructor(
         p[Keys.SAVE_ORIGINALS] = s.saveOriginals
         p[Keys.SECURE] = s.secureScreens
         p[Keys.TIPS_SEEN] = s.hasSeenCaptureTips
+        p[Keys.SHUTTER_SOUND] = s.shutterSound
+        p[Keys.VIBRATION] = s.vibration
     }
 
     private inline fun <reified E : Enum<E>> String?.toEnum(default: E): E =
@@ -86,6 +90,8 @@ public class DataStoreSettingsRepository @Inject constructor(
         val SAVE_ORIGINALS = booleanPreferencesKey("save_originals")
         val SECURE = booleanPreferencesKey("secure_screens")
         val TIPS_SEEN = booleanPreferencesKey("capture_tips_seen")
+        val SHUTTER_SOUND = booleanPreferencesKey("shutter_sound")
+        val VIBRATION = booleanPreferencesKey("vibration")
     }
 
 }

@@ -24,13 +24,16 @@ public data class DocumentSummary(
     val deletedAt: Instant?,
     val coverThumbPath: String?,
     val snippet: Snippet? = null,
+    /** At least one page has recognised, non-blank text (NV-04 filter). */
+    val hasText: Boolean = false,
 )
 
 /** A text excerpt with the ranges that matched the query. */
 public data class Snippet(val text: String, val highlights: List<IntRange>)
 
 /** FR-2. */
-public enum class SortOrder { CREATED_DESC, MODIFIED_DESC, TITLE_ASC }
+/** FR-2; PAGES_DESC added by NV-04 (largest first; ties newest first). */
+public enum class SortOrder { CREATED_DESC, MODIFIED_DESC, TITLE_ASC, PAGES_DESC }
 
 public interface DocumentRepository {
     /** Live documents directly inside [folderId] (null = the library root). */

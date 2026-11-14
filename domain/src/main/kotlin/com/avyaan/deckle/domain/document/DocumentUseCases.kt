@@ -50,7 +50,8 @@ public class ObserveLibraryUseCase @Inject constructor(
     private fun SortOrder.folderComparator(): Comparator<Folder> = when (this) {
         SortOrder.CREATED_DESC -> compareByDescending { it.createdAt }
         SortOrder.MODIFIED_DESC -> compareByDescending { it.modifiedAt }
-        SortOrder.TITLE_ASC -> compareBy(String.CASE_INSENSITIVE_ORDER) { it.name }
+        // Folders have no page count of their own, so they keep a name order.
+        SortOrder.TITLE_ASC, SortOrder.PAGES_DESC -> compareBy(String.CASE_INSENSITIVE_ORDER) { it.name }
     }
 }
 

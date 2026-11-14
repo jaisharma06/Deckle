@@ -137,6 +137,39 @@ class UseCaseTest {
         assertThat(docs.observeTrash().first()).isEmpty()       // and nothing empty parked in the trash
     }
 
+    @Test fun `duplicating a page copies its files and text and places the copy right after it`() = runTest {
+        docs.create("doc", "A", clock.now())
+        val p1 = page("p1", 1000).copy(name = "Front", mode = EnhancementMode.BLACK_AND_WHITE,
+            ocr = com.avyaan.deckle.domain.ocr.OcrState(OcrStatus.DONE, listOf(OcrLine("Hello", RectN(0f, 0f, 1f, 1f), 1f)), 1))
+        pages.insert(listOf(p1, page("p2", 2000)))
+        p1.let { listOf(it.basePath, it.processedPath, it.thumbPath).forEach(files::put) }
+        clock.instant = clock.instant.plusSeconds(60)
+
+        val copyId = duplicatePage()("p1")!!
+
+        assertThat(pages.pages("doc").sortedBy { it.orderIndex }.map { it.id }).containsExactly("p1", copyId, "p2").inOrder()
+        val copy = pages.get(copyId)!!
+        assertThat(copy.name).isEqualTo("Front")
+        assertThat(copy.mode).isEqualTo(EnhancementMode.BLACK_AND_WHITE)
+        assertThat(listOf(copy.basePath, copy.processedPath, copy.thumbPath)).containsNoneOf(p1.basePath, p1.processedPath, p1.thumbPath)
+        assertThat(listOf(copy.basePath, copy.processedPath, copy.thumbPath).all { it in files.files }).isTrue()
+        assertThat(pages.plainText(copyId)).isEqualTo("Hello")       // searchable at once, no second OCR run
+        assertThat(ocr.enqueued).isEmpty()
+        assertThat(docs.get("doc")!!.modifiedAt).isEqualTo(clock.instant)
+    }
+
+    @Test fun `duplicating a page whose text isn't read yet queues OCR for the copy`() = runTest {
+        docs.create("doc", "A", clock.now())
+        val p1 = page("p1", 1000)
+        pages.insert(listOf(p1))
+        listOf(p1.basePath, p1.processedPath, p1.thumbPath).forEach(files::put)
+
+        val copyId = duplicatePage()("p1")!!
+
+        assertThat(ocr.enqueued).containsExactly(copyId)
+        assertThat(pages.get(copyId)!!.orderIndex).isGreaterThan(1000L)
+    }
+
     @Test fun `reorder writes one row when there is a gap`() = runTest {
         docs.create("doc", "A", clock.now())
         pages.insert(listOf(page("a", 1000), page("b", 2000), page("c", 3000)))
@@ -181,6 +214,8 @@ class UseCaseTest {
         rename("p", "   ")
         assertThat(pages.get("p")!!.name).isNull()
     }
+
+    private fun duplicatePage() = com.avyaan.deckle.domain.page.DuplicatePageUseCase(pages, docs, files, ocr, tx, SequentialIds("dup"), clock)
 
     private fun deletePage() = com.avyaan.deckle.domain.page.DeletePageUseCase(pages, docs, files, ocr, tx, clock, DeleteDocumentsPermanentlyUseCase(docs, files, tx))
 

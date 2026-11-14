@@ -41,6 +41,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
@@ -390,7 +391,15 @@ private fun LibraryGrid(
                 SearchField(state.query, { onEvent(LibraryEvent.QueryChanged(it)) })
                 if (state.path.isNotEmpty() && state.query.isEmpty()) Breadcrumbs(state, onOpenCrumb, Modifier.padding(top = Spacing.s))
                 AnimatedVisibility(state.query.isEmpty() && !state.selecting, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
-                    SortChip(state.sort, { onEvent(LibraryEvent.SortChanged(it)) }, Modifier.padding(top = Spacing.m))
+                    Row(Modifier.padding(top = Spacing.m), horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
+                        SortChip(state.sort, { onEvent(LibraryEvent.SortChanged(it)) })
+                        FilterChip(
+                            selected = state.textOnly,
+                            onClick = { onEvent(LibraryEvent.TextOnlyChanged(!state.textOnly)) },
+                            label = { Text(stringResource(R.string.library_filter_has_text)) },
+                            leadingIcon = { Icon(if (state.textOnly) DeckleIcons.Check else DeckleIcons.Text, null, Modifier.size(18.dp)) },
+                        )
+                    }
                 }
             }
         }
@@ -408,6 +417,14 @@ private fun LibraryGrid(
                 EmptyState(
                     title = stringResource(R.string.library_no_results, content.query),
                     body = stringResource(R.string.library_no_results_body),
+                    illustration = {},
+                    modifier = Modifier.padding(top = Spacing.xxxl).animateItem(),
+                )
+            }
+            LibraryContent.NoText -> item(key = "notext", span = { GridItemSpan(maxLineSpan) }) {
+                EmptyState(
+                    title = stringResource(R.string.library_no_text),
+                    body = stringResource(R.string.library_no_text_body),
                     illustration = {},
                     modifier = Modifier.padding(top = Spacing.xxxl).animateItem(),
                 )
@@ -720,6 +737,7 @@ private fun SortOrder.label(): Int = when (this) {
     SortOrder.CREATED_DESC -> R.string.library_sort_created
     SortOrder.MODIFIED_DESC -> R.string.library_sort_modified
     SortOrder.TITLE_ASC -> R.string.library_sort_title
+    SortOrder.PAGES_DESC -> R.string.library_sort_pages
 }
 
 /** Spec 02 §5.2: an unfinished scan survives process death and is offered back here. */

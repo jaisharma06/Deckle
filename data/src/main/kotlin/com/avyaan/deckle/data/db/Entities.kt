@@ -97,6 +97,7 @@ public data class DocumentSummaryRow(
     val coverThumbPath: String?,
     val snippet: String?,
     val matchRank: Int,
+    val hasText: Boolean = false,
 )
 
 /**

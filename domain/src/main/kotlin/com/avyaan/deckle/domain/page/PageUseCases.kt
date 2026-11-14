@@ -19,6 +19,8 @@ import com.avyaan.deckle.domain.imaging.PerspectiveCorrector
 import com.avyaan.deckle.domain.imaging.ThumbnailMaker
 import com.avyaan.deckle.domain.ocr.OcrScheduler
 import com.avyaan.deckle.domain.ocr.OcrState
+import com.avyaan.deckle.domain.ocr.OcrStatus
+import com.avyaan.deckle.domain.ocr.toPlainText
 import javax.inject.Inject
 import kotlinx.coroutines.flow.Flow
 
@@ -97,6 +99,70 @@ public class DeletePageUseCase @Inject constructor(
         if (pages.pages(page.documentId).isNotEmpty()) return false
         deleteDocuments(listOf(page.documentId))
         return true
+    }
+}
+
+/**
+ * NV-02: an independent copy of a page, placed right after it. Files are copied under fresh paths so
+ * editing either page never touches the other. Recognised text is copied too (no second OCR run);
+ * a page whose OCR hasn't finished gets its own OCR job. Returns the new page id.
+ */
+public class DuplicatePageUseCase @Inject constructor(
+    private val pages: PageRepository,
+    private val documents: DocumentRepository,
+    private val files: PageFileStore,
+    private val ocr: OcrScheduler,
+    private val tx: TransactionRunner,
+    private val ids: IdGenerator,
+    private val clock: Clock,
+) {
+    public suspend operator fun invoke(pageId: String): String? {
+        val page = pages.get(pageId) ?: return null
+        val newId = ids.newId()
+        val rev = ids.newRevision()
+        fun path(kind: PageFileKind) = files.pathFor(page.documentId, newId, kind, rev)
+        val copies = listOfNotNull(
+            page.sourcePath?.let { it to path(PageFileKind.SOURCE) },
+            page.basePath to path(PageFileKind.BASE),
+            page.processedPath to path(PageFileKind.PROCESSED),
+            page.thumbPath to path(PageFileKind.THUMB),
+        )
+        val written = mutableListOf<String>()
+        try {
+            copies.forEach { (from, to) -> files.copy(from, to); written += to }
+        } catch (e: Exception) {
+            written.forEach { files.delete(it) }
+            throw e
+        }
+        val copiedPath = copies.toMap()
+        val done = page.ocr.status == OcrStatus.DONE
+        val copy = page.copy(
+            id = newId,
+            sourcePath = page.sourcePath?.let(copiedPath::getValue),
+            basePath = copiedPath.getValue(page.basePath),
+            processedPath = copiedPath.getValue(page.processedPath),
+            thumbPath = copiedPath.getValue(page.thumbPath),
+            ocr = if (done) page.ocr else OcrState.QUEUED,
+        )
+        try {
+            tx.inTransaction {
+                val ordered = pages.pages(page.documentId).sortedBy { it.orderIndex }
+                val next = ordered.getOrNull(ordered.indexOfFirst { it.id == pageId } + 1)
+                val index = OrderIndexAllocator.between(page.orderIndex, next?.orderIndex)
+                pages.insert(listOf(copy.copy(orderIndex = index ?: page.orderIndex)))
+                if (index == null) {
+                    val ids = ordered.map { it.id }.toMutableList().apply { add(indexOf(pageId) + 1, newId) }
+                    pages.updateOrders(OrderIndexAllocator.renumber(ids))
+                }
+                if (done) pages.setOcr(newId, page.ocr, page.ocr.lines?.toPlainText())
+                documents.touch(page.documentId, clock.now())
+            }
+        } catch (e: Exception) {
+            written.forEach { files.delete(it) }
+            throw e
+        }
+        if (!done) ocr.enqueue(listOf(newId))
+        return newId
     }
 }
 

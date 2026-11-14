@@ -25,6 +25,10 @@ public data class AppSettings(
     val saveOriginals: Boolean = true,
     val secureScreens: Boolean = true,
     val hasSeenCaptureTips: Boolean = false,
+    /** NV-05: shutter click on capture. Some regions require it; then it plays regardless. */
+    val shutterSound: Boolean = true,
+    /** NV-05: haptic feedback across the app (the system haptics setting still applies on top). */
+    val vibration: Boolean = true,
 )
 
 public interface SettingsRepository {

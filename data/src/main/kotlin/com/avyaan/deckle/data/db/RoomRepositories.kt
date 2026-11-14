@@ -34,6 +34,8 @@ public class RoomDocumentRepository @Inject constructor(db: DeckleDatabase) : Do
         SortOrder.CREATED_DESC -> dao.libraryByCreated(folderId)
         SortOrder.MODIFIED_DESC -> dao.libraryByModified(folderId)
         SortOrder.TITLE_ASC -> dao.libraryByTitle(folderId)
+        // Sorting the (already newest-first) rows keeps ties newest first without another query.
+        SortOrder.PAGES_DESC -> dao.libraryByCreated(folderId).map { rows -> rows.sortedByDescending { it.pageCount } }
     }.map { rows -> rows.map { it.toDomain() } }
 
     override fun search(titleQuery: String, ftsQuery: String?, sort: SortOrder): Flow<List<DocumentSummary>> {
@@ -76,6 +78,7 @@ public class RoomDocumentRepository @Inject constructor(db: DeckleDatabase) : Do
         SortOrder.CREATED_DESC -> compareByDescending { it.createdAt }
         SortOrder.MODIFIED_DESC -> compareByDescending { it.modifiedAt }
         SortOrder.TITLE_ASC -> compareBy(String.CASE_INSENSITIVE_ORDER) { it.title }
+        SortOrder.PAGES_DESC -> compareByDescending<DocumentSummary> { it.pageCount }.thenByDescending { it.createdAt }
     }
 }
 

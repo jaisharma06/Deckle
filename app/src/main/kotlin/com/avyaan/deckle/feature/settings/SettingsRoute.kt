@@ -91,6 +91,8 @@ fun SettingsRoute(onBack: () -> Unit, onAbout: () -> Unit, vm: SettingsViewModel
             SwitchRow(R.string.settings_auto_capture, R.string.settings_auto_capture_desc, s.autoCapture) { v -> update { it.copy(autoCapture = v) } }
             ChoiceRow(R.string.settings_flash, s.flash, FlashMode.entries, { it.label() }) { v -> update { it.copy(flash = v) } }
             SwitchRow(R.string.settings_save_originals, R.string.settings_save_originals_desc, s.saveOriginals) { v -> update { it.copy(saveOriginals = v) } }
+            SwitchRow(R.string.settings_shutter_sound, R.string.settings_shutter_sound_desc, s.shutterSound) { v -> update { it.copy(shutterSound = v) } }
+            SwitchRow(R.string.settings_vibration, R.string.settings_vibration_desc, s.vibration) { v -> update { it.copy(vibration = v) } }
 
             Group(R.string.settings_group_text)
             ListItem(headlineContent = { Text(stringResource(R.string.settings_ocr_language)) }, leadingContent = { Icon(DeckleIcons.Text, null) })

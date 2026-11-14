@@ -33,6 +33,14 @@
     <string name="library_sort_created">Date created</string>
     <string name="library_sort_modified">Date modified</string>
     <string name="library_sort_title">Title</string>
+    <string name="library_sort_pages">Page count</string>
+    <string name="settings_shutter_sound">Shutter sound</string>
+    <string name="settings_shutter_sound_desc">Play a click when a page is captured</string>
+    <string name="settings_vibration">Vibration</string>
+    <string name="settings_vibration_desc">Gentle vibrations when you capture, select or confirm</string>
+    <string name="library_filter_has_text">Has text</string>
+    <string name="library_no_text">No documents with text here yet</string>
+    <string name="library_no_text_body">Deckle reads the text in your scans in the background. Documents show up here once their text is ready.</string>
     <string name="library_sort_label">Sort by %1$s</string>
     <string name="library_scan">Scan</string>
     <string name="library_scan_first">Scan your first document</string>
@@ -154,6 +162,12 @@
     <string name="review_add_page">Add page</string>
     <string name="review_delete_page">Delete page</string>
     <string name="review_page_deleted">Page deleted</string>
+    <string name="review_select_pages">Select pages</string>
+    <string name="action_select_all">Select all</string>
+    <plurals name="review_pages_deleted">
+        <item quantity="one">%d page deleted</item>
+        <item quantity="other">%d pages deleted</item>
+    </plurals>
     <plurals name="review_finishing">
         <item quantity="one">Finishing %d…</item>
         <item quantity="other">Finishing %d…</item>
@@ -270,6 +284,8 @@
     <string name="page_rename">Rename page</string>
     <string name="page_crop">Crop</string>
     <string name="page_export">Export page</string>
+    <string name="page_duplicate">Duplicate</string>
+    <string name="page_duplicated">Page duplicated</string>
     <string name="page_name_hint">Page %1$d</string>
     <string name="crop_cancel_import">Cancel</string>
     <string name="library_import">Import from gallery</string>

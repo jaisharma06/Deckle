@@ -149,7 +149,7 @@ class PendingDeleteTest {
         val owner = ViewModelStore()
         val vm = review(owner)
         vm.onEvent(ReviewEvent.DeletePage)
-        vm.onEvent(ReviewEvent.UndoDelete("c2"))
+        vm.onEvent(ReviewEvent.UndoDelete(listOf("c2")))
         owner.clear()
         advanceUntilIdle()
         assertThat(captureIds()).containsExactly("c1", "c2").inOrder()

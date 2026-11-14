@@ -308,6 +308,7 @@ private fun PageGrid(
                     onCrop = { vm.onEvent(DocumentEvent.CropPage(page.id)) },
                     onRename = { onRename(page.id) },
                     onExport = { onExport(page.id) },
+                    onDuplicate = { vm.onEvent(DocumentEvent.DuplicatePage(page.id)) },
                     onFailedTapped = { onFailedTapped(page.id) },
                     modifier = Modifier
                         .graphicsLayer { scaleX = lift; scaleY = lift }
@@ -342,6 +343,7 @@ private fun PageTile(
     onCrop: () -> Unit,
     onRename: () -> Unit,
     onExport: () -> Unit,
+    onDuplicate: () -> Unit,
     onFailedTapped: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -377,6 +379,7 @@ private fun PageTile(
                 DropdownMenuItem(text = { Text(stringResource(R.string.page_crop)) }, leadingIcon = { Icon(DeckleIcons.Crop, null) }, onClick = { menu = false; onCrop() })
                 DropdownMenuItem(text = { Text(stringResource(R.string.page_rename)) }, leadingIcon = { Icon(DeckleIcons.Edit, null) }, onClick = { menu = false; onRename() })
                 DropdownMenuItem(text = { Text(stringResource(R.string.page_export)) }, leadingIcon = { Icon(DeckleIcons.Share, null) }, onClick = { menu = false; onExport() })
+                DropdownMenuItem(text = { Text(stringResource(R.string.page_duplicate)) }, leadingIcon = { Icon(DeckleIcons.Copy, null) }, onClick = { menu = false; onDuplicate() })
                 DropdownMenuItem(text = { Text(stringResource(R.string.document_set_cover)) }, leadingIcon = { Icon(DeckleIcons.Pages, null) }, onClick = { menu = false; onSetCover() }, enabled = !isCover)
             }
         }

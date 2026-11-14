@@ -47,6 +47,7 @@ internal object Mappers {
         deletedAt = deletedAt?.let(Instant::ofEpochMilli),
         coverThumbPath = coverThumbPath,
         snippet = snippet?.let(SnippetParser::parse),
+        hasText = hasText,
     )
 
     fun PageEntity.toDomain() = Page(

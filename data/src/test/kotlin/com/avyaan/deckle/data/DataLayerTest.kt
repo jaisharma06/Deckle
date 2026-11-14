@@ -91,6 +91,21 @@ class DataLayerTest {
         assertThat(zebra.coverThumbPath).endsWith(File("thumbs", "p0.jpg").path)   // first page by order
     }
 
+    @Test fun librarySortsByPageCount_andFlagsDocumentsWithText() = runTest {
+        docs.create("one", "One page", clock.now())
+        docs.create("three", "Three pages", clock.now().plusSeconds(1))
+        docs.create("two", "Two pages", clock.now().plusSeconds(2))
+        pages.insert(listOf(page("o1", "one", 1000)))
+        pages.insert(listOf(page("t1", "three", 1000), page("t2", "three", 2000), page("t3", "three", 3000)))
+        pages.insert(listOf(page("w1", "two", 1000), page("w2", "two", 2000)))
+        pages.setOcr("w2", OcrState(OcrStatus.DONE, listOf(OcrLine("Rent", RectN(0f, 0f, 1f, 0.1f), 0.9f)), 1), "Rent")
+        pages.setOcr("o1", OcrState(OcrStatus.DONE, emptyList(), 1), "")     // read, but blank: no text
+
+        val byPages = docs.observeLibrary(SortOrder.PAGES_DESC, null).first()
+        assertThat(byPages.map { it.id }).containsExactly("three", "two", "one").inOrder()
+        assertThat(byPages.associate { it.id to it.hasText }).containsExactly("three", false, "two", true, "one", false)
+    }
+
     @Test fun searchFindsTitleAndOcrText_withHighlightedSnippet() = runTest {
         docs.create("a", "Lease agreement", clock.now())
         docs.create("b", "Receipts", clock.now())
