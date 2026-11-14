@@ -62,7 +62,7 @@ android {
     namespace = "com.avyaan.deckle"
     compileSdk = 36
     defaultConfig {
-        applicationId = "com.AvyaanStudios.Deckle"
+        applicationId = "com.avyaanstudios.deckle"
         minSdk = 26; targetSdk = 36
     }
     buildTypes {

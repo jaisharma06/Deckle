@@ -2,7 +2,7 @@
 
 Milestones are ordered so that each one ends with something **runnable and tested**, and so risky native work (OpenCV, PDFBox in release) is proven early. Within a milestone, tasks are listed in build order. Use TDD for everything in `:domain` and for DAOs.
 
-> Confirmed: name **Deckle**, application ID `com.AvyaanStudios.Deckle` (Kotlin packages stay lower-case `com.avyaan.deckle`), Latin-only OCR (no Devanagari in v1). Nothing blocks M0.
+> Confirmed: name **Deckle**, application ID `com.avyaanstudios.deckle` (Kotlin packages are `com.avyaan.deckle`), Latin-only OCR (no Devanagari in v1). Nothing blocks M0.
 
 ---
 

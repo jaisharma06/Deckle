@@ -98,6 +98,17 @@ export DECKLE_KEYSTORE_PASSWORD=...  DECKLE_KEY_ALIAS=...  DECKLE_KEY_PASSWORD=.
 - `tools/ci/check-merged-manifest.sh` checks that no network permission is present and that the permissions match the snapshot.
 - `tools/ci/check-apk-size.sh` sets a size budget for the release APK.
 
+## CI/CD
+
+- **CI** (`.github/workflows/ci.yml`) runs on every push to `main` and on every pull request. It runs the tests, `lintRelease` and a debug-signed R8 release build, then all of the project checks above plus a check that Room schemas are committed. The APKs are uploaded as build artifacts.
+- **Release** (`.github/workflows/release.yml`) runs when you push a `vMAJOR.MINOR.PATCH` tag, or manually. It builds a bundle signed with the upload key and checks that it isn't debug-signed. Then it uploads the bundle and R8 mapping to Google Play, using the release notes in `distribution/whatsnew/`. The version comes from the tag: `v1.2.3` becomes versionName 1.2.3 and versionCode 10203.
+
+```bash
+git tag v1.0.1 && git push origin v1.0.1    # → internal testing track
+```
+
+The release workflow needs these repository secrets: `DECKLE_UPLOAD_KEYSTORE_BASE64`, `DECKLE_KEYSTORE_PASSWORD`, `DECKLE_KEY_ALIAS`, `DECKLE_KEY_PASSWORD` and `PLAY_SERVICE_ACCOUNT_JSON`. An optional variable, `PLAY_RELEASE_STATUS`, controls the release status. Use `draft` until the app's first release is published, then `completed`.
+
 ## Privacy
 
 See [PRIVACY.md](PRIVACY.md) (published at <https://jaisharma06.github.io/Deckle/privacy/>). In short: Deckle collects nothing, because it has no way to send anything.

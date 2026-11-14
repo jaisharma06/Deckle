@@ -9,9 +9,10 @@ android {
     namespace = "com.avyaan.deckle"
 
     defaultConfig {
-        applicationId = "com.AvyaanStudios.Deckle"
-        versionCode = 1
-        versionName = "1.0.0"
+        applicationId = "com.avyaanstudios.deckle"
+        // Local builds use these; the release workflow passes values derived from the git tag (v1.2.3 → 10203).
+        versionCode = providers.gradleProperty("deckle.versionCode").orNull?.toInt() ?: 1
+        versionName = providers.gradleProperty("deckle.versionName").orNull ?: "1.0.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
     }

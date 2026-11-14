@@ -137,6 +137,8 @@ Ready-made: `docs/play-store/graphics/play-icon-512.png` and `feature-graphic-10
 | Phone screenshots | 2–8 images, 16:9 or 9:16, 320–3840 px per side | At least 4 at ≥ 1080 px to be eligible for featuring. |
 | Tablet screenshots | optional | Only if you want the tablet listing. |
 
+Ready-made: `docs/play-store/graphics/screenshots/01-crop.png` … `06-export.png` (1080 × 1920, made-up sample documents only). Upload them in that order.
+
 Suggested screenshot order, each with a short caption bar on top:
 1. Live detection outline on a page: "Finds the page for you"
 2. Before/after filter comparison: "Clean scans, no shadows"
@@ -169,4 +171,4 @@ Done. The policy is served by GitHub Pages from the `gh-pages` branch:
 5. **Production:** after the test period, apply for production access in the Console, then roll out, starting at 20% if you like.
 6. Every later update needs `versionCode` increased in `app/build.gradle.kts`.
 
-The application ID `com.AvyaanStudios.Deckle` is permanent once the first bundle is uploaded.
+The application ID `com.avyaanstudios.deckle` is permanent once the first bundle is uploaded.

@@ -6,7 +6,7 @@
 
 Deckle is an offline-only Android document scanner: capture → edge detection → perspective correction → enhancement → OCR → searchable PDF. No `INTERNET` permission, no Play Services dependency, everything bundled.
 
-> **Name (confirmed).** The product is **Deckle** (the rough, untrimmed edge of handmade paper); application ID `com.AvyaanStudios.Deckle` (Kotlin packages stay lower-case `com.avyaan.deckle`). This replaces the requirements' placeholders `OfflineScan` / `com.avyaan.offlinescan` everywhere.
+> **Name (confirmed).** The product is **Deckle** (the rough, untrimmed edge of handmade paper); application ID `com.avyaanstudios.deckle` (Kotlin packages are `com.avyaan.deckle`). This replaces the requirements' placeholders `OfflineScan` / `com.avyaan.offlinescan` everywhere.
 >
 > **OCR scope (confirmed).** v1 recognises **Latin script only**. Hindi/Marathi (Devanagari) is deferred to v2: no Devanagari model, no Noto font, no build flag.
 

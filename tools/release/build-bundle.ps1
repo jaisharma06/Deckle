@@ -2,12 +2,18 @@
 # The password is asked for here and only lives in this process; nothing is written to disk.
 #
 # usage (from the repo root):  powershell -ExecutionPolicy Bypass -File tools/release/build-bundle.ps1
-#        optional:             -Keystore D:/Keys/deckle-upload.jks -Alias deckle
+#        optional:             -Version 1.0.1   (versionCode = major*10000 + minor*100 + patch, as in CI)
+#                              -Keystore D:/Keys/deckle-upload.jks -Alias deckle
 param(
+    [string]$Version = "1.0.0",
     [string]$Keystore = "D:/Keys/deckle-upload.jks",
     [string]$Alias = "deckle"
 )
 $ErrorActionPreference = "Stop"
+
+if ($Version -notmatch '^(\d+)\.(\d+)\.(\d+)$') { throw "Version must be MAJOR.MINOR.PATCH, e.g. 1.0.1" }
+$code = [int]$Matches[1] * 10000 + [int]$Matches[2] * 100 + [int]$Matches[3]
+Write-Host "Building $Version (versionCode $code)"
 
 if (-not (Test-Path $Keystore)) { throw "Keystore not found: $Keystore" }
 
@@ -21,12 +27,12 @@ try {
     # keytool's default PKCS12 keystores use the same password for the key.
     $env:DECKLE_KEY_PASSWORD = $plain
 
-    & ./gradlew.bat bundleRelease --no-daemon
+    & ./gradlew.bat bundleRelease --no-daemon "-Pdeckle.versionCode=$code" "-Pdeckle.versionName=$Version"
     if ($LASTEXITCODE -ne 0) { throw "Build failed" }
 
     $aab = "app/build/outputs/bundle/release/app-release.aab"
     Write-Host ""
-    Write-Host "Signed bundle: $((Resolve-Path $aab).Path)" -ForegroundColor Green
+    Write-Host "Signed bundle $Version ($code): $((Resolve-Path $aab).Path)" -ForegroundColor Green
     Write-Host "Upload it in Play Console > Test and release > Closed testing > Create new release."
 }
 finally {

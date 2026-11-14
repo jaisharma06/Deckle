@@ -1,0 +1,70 @@
+# Every gate from spec 07 §4 on every push and pull request.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: Tests, lint and release gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      # Caches Gradle and verifies the wrapper JAR hasn't been tampered with.
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Unit and Robolectric tests
+        run: ./gradlew test --stacktrace
+
+      - name: Lint (release)
+        run: ./gradlew lintRelease
+
+      # Debug-signed so the minified release build is exercised without the real key.
+      - name: Release build (R8, debug-signed)
+        run: ./gradlew assembleRelease -Pdeckle.signing=debug
+
+      - name: "Gate: forbidden dependencies, allowlist, destructive migrations"
+        run: bash tools/ci/check-forbidden.sh
+
+      - name: "Gate: no network permission, permission snapshot"
+        run: bash tools/ci/check-merged-manifest.sh
+
+      - name: "Gate: arm64 size budget"
+        run: bash tools/ci/check-apk-size.sh
+
+      - name: "Gate: Room schemas committed"
+        run: git diff --exit-code -- data/schemas
+
+      - name: Upload reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reports
+          path: |
+            **/build/reports/
+            **/build/test-results/
+          retention-days: 14
+
+      - name: Upload APKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: apk-release-debugsigned
+          path: app/build/outputs/apk/release/*.apk
+          retention-days: 14
