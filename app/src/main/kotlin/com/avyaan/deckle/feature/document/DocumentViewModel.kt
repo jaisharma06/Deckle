@@ -36,6 +36,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.dropWhile
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -130,6 +132,15 @@ class DocumentViewModel @Inject constructor(
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DocumentUiState())
 
+    init {
+        // Deleting the last page deletes the document (here or in the viewer); leave once it's gone.
+        // Trash (deletedAt set) isn't handled here: Delete already closes the screen itself.
+        viewModelScope.launch {
+            observeDocument(documentId).dropWhile { it == null }.first { it == null }
+            send(DocumentEffect.Deleted)
+        }
+    }
+
     fun onEvent(event: DocumentEvent) {
         when (event) {
             is DocumentEvent.Rename -> viewModelScope.launch {
@@ -176,8 +187,9 @@ class DocumentViewModel @Inject constructor(
                 val ids = local.value.selection
                 local.update { Local() }
                 viewModelScope.launch {
-                    ids.forEach { deletePage(it) }
-                    send(DocumentEffect.Message(UiText.Res(R.string.review_page_deleted)))
+                    // If that was every page the document is gone too, and the screen closes (see init).
+                    val documentRemoved = ids.map { deletePage(it) }.any { it }
+                    if (!documentRemoved) send(DocumentEffect.Message(UiText.Res(R.string.review_page_deleted)))
                 }
             }
         }

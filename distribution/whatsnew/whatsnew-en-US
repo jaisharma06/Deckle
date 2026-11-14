@@ -1,6 +1,6 @@
-Welcome to Deckle, a document scanner that never goes online.
-• Auto-detect and auto-capture pages
-• 18 filters with shadow removal
-• Searchable PDFs with on-device OCR
-• Folders, sub-folders and five library views
-• Password-protected PDFs and folder ZIP export
+What's new in 1.0.1
+• Export a single page: long-press it, or tap Share in the page viewer
+• Deleting every page of a document now removes the document
+• Fixed: deleted pages could come back after leaving the screen
+• Fixed: export buttons stayed off after exporting once
+• Clearer review toolbar, and smoother inline renaming

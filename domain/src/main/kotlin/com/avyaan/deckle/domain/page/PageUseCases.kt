@@ -69,7 +69,12 @@ public class ReorderPageUseCase @Inject constructor(
     }
 }
 
-/** FR-42 delete. The UI defers calling this until the undo snackbar expires. */
+/**
+ * FR-42 delete. The UI defers calling this until the undo snackbar expires.
+ * Deleting a document's last page deletes the document too: a document with no pages has nothing to show
+ * or export, and the pages are already gone for good, so it isn't kept in the trash either.
+ * Returns true if the document was removed.
+ */
 public class DeletePageUseCase @Inject constructor(
     private val pages: PageRepository,
     private val documents: DocumentRepository,
@@ -77,9 +82,10 @@ public class DeletePageUseCase @Inject constructor(
     private val ocr: OcrScheduler,
     private val tx: TransactionRunner,
     private val clock: Clock,
+    private val deleteDocuments: com.avyaan.deckle.domain.document.DeleteDocumentsPermanentlyUseCase,
 ) {
-    public suspend operator fun invoke(pageId: String) {
-        val page = pages.get(pageId) ?: return
+    public suspend operator fun invoke(pageId: String): Boolean {
+        val page = pages.get(pageId) ?: return false
         ocr.cancel(pageId)
         tx.inTransaction {
             pages.delete(pageId)
@@ -88,6 +94,9 @@ public class DeletePageUseCase @Inject constructor(
             documents.touch(page.documentId, clock.now())
         }
         page.allPaths().forEach { files.delete(it) }
+        if (pages.pages(page.documentId).isNotEmpty()) return false
+        deleteDocuments(listOf(page.documentId))
+        return true
     }
 }
 

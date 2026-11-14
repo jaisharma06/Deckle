@@ -177,7 +177,7 @@ class PendingDeleteTest {
                 settings = settings,
                 reEnhance = ReEnhancePageUseCase(pageRepo, renderer, docs, clock),
                 rotate = RotatePageUseCase(pageRepo, Unused, FakeThumbnailMaker(files), renderer, docs, ids, clock),
-                deletePage = DeletePageUseCase(pageRepo, docs, files, FakeOcrScheduler(), FakeTransactionRunner(), clock),
+                deletePage = DeletePageUseCase(pageRepo, docs, files, FakeOcrScheduler(), FakeTransactionRunner(), clock, com.avyaan.deckle.domain.document.DeleteDocumentsPermanentlyUseCase(docs, files, FakeTransactionRunner())),
                 enhancer = Unused,
                 files = files,
                 renamePage = RenamePageUseCase(pageRepo, docs, clock),

@@ -30,6 +30,7 @@ import com.avyaan.deckle.domain.scan.StagedCapture
 import com.avyaan.deckle.domain.scan.StagedStatus
 import com.avyaan.deckle.domain.settings.AppSettings
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Test
 
@@ -123,6 +124,19 @@ class UseCaseTest {
         assertThat(pages.all()).isEmpty()
     }
 
+    @Test fun `deleting the last page removes the document, earlier deletes keep it`() = runTest {
+        docs.create("doc", "A", clock.now())
+        pages.insert(listOf(page("p1", 1000), page("p2", 2000)))
+        val delete = deletePage()
+
+        delete("p1")
+        assertThat(docs.get("doc")).isNotNull()
+
+        delete("p2")
+        assertThat(docs.get("doc")).isNull()                    // no empty "0 pages" document left behind
+        assertThat(docs.observeTrash().first()).isEmpty()       // and nothing empty parked in the trash
+    }
+
     @Test fun `reorder writes one row when there is a gap`() = runTest {
         docs.create("doc", "A", clock.now())
         pages.insert(listOf(page("a", 1000), page("b", 2000), page("c", 3000)))
@@ -167,6 +181,8 @@ class UseCaseTest {
         rename("p", "   ")
         assertThat(pages.get("p")!!.name).isNull()
     }
+
+    private fun deletePage() = com.avyaan.deckle.domain.page.DeletePageUseCase(pages, docs, files, ocr, tx, clock, DeleteDocumentsPermanentlyUseCase(docs, files, tx))
 
     private fun page(id: String, order: Long) = com.avyaan.deckle.domain.page.Page(
         id, "doc", order, null, "/b/$id", "/p/$id", "/t/$id", Quad.FULL,
