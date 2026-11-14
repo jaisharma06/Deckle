@@ -12,6 +12,9 @@ import com.avyaan.deckle.domain.ocr.OcrLine
 import com.avyaan.deckle.domain.ocr.OcrState
 import com.avyaan.deckle.domain.ocr.OcrStatus
 import com.avyaan.deckle.domain.page.Page
+import com.avyaan.deckle.domain.markup.PageMarkup
+import com.avyaan.deckle.domain.tag.Tag
+import com.avyaan.deckle.domain.tag.TagColor
 import java.time.Instant
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
@@ -32,11 +35,18 @@ internal object Mappers {
         coverPageId = coverPageId,
         deletedAt = deletedAt?.let(Instant::ofEpochMilli),
         folderId = folderId,
+        pinned = pinned,
+        expiresAt = expiresAt?.let(Instant::ofEpochMilli),
+        expiryNotifiedDays = expiryNotifiedDays,
     )
 
-    fun FolderEntity.toDomain() = Folder(id, name, parentId, Instant.ofEpochMilli(createdAt), Instant.ofEpochMilli(modifiedAt))
+    fun FolderEntity.toDomain() = Folder(id, name, parentId, Instant.ofEpochMilli(createdAt), Instant.ofEpochMilli(modifiedAt), pinned)
 
-    fun Folder.toEntity() = FolderEntity(id, name, parentId, createdAt.toEpochMilli(), modifiedAt.toEpochMilli())
+    fun Folder.toEntity() = FolderEntity(id, name, parentId, createdAt.toEpochMilli(), modifiedAt.toEpochMilli(), pinned)
+
+    fun TagEntity.toDomain() = Tag(id, name, enumOr(color, TagColor.CLAY), Instant.ofEpochMilli(createdAt))
+
+    fun Tag.toEntity() = TagEntity(id, name, color.name, createdAt.toEpochMilli())
 
     fun DocumentSummaryRow.toDomain() = DocumentSummary(
         id = id,
@@ -48,6 +58,10 @@ internal object Mappers {
         coverThumbPath = coverThumbPath,
         snippet = snippet?.let(SnippetParser::parse),
         hasText = hasText,
+        pinned = pinned,
+        expiresAt = expiresAt?.let(Instant::ofEpochMilli),
+        tagIds = tagIds?.split(',')?.filter { it.isNotEmpty() }?.toSet().orEmpty(),
+        signed = signed,
     )
 
     fun PageEntity.toDomain() = Page(
@@ -66,6 +80,7 @@ internal object Mappers {
         heightPx = heightPx,
         ocr = OcrState(enumOr(ocrStatus, OcrStatus.QUEUED), decodeLines(ocrLinesJson), ocrAttempts),
         name = name,
+        markup = PageMarkup.decode(markupJson),
     )
 
     fun Page.toEntity(plainText: String?) = PageEntity(
@@ -88,6 +103,7 @@ internal object Mappers {
         ocrLinesJson = encodeLines(ocr.lines),
         name = name,
         ocrPlainText = plainText,
+        markupJson = PageMarkup.encode(markup),
     )
 
     fun encodeLines(lines: List<OcrLine>?): String? = lines?.let { json.encodeToString(linesSerializer, it) }

@@ -124,7 +124,7 @@ class FolderTest {
         val a = create(null, "A")!!
         val b = create(a, "B")!!
         doc("root", null); doc("inA", a); doc("inB", b)
-        val observe = ObserveLibraryUseCase(docs, folders, FakeSettingsRepository())
+        val observe = ObserveLibraryUseCase(docs, folders, FakeSettingsRepository(), com.avyaan.deckle.domain.fakes.FakeClock())
         val root = observe("", null).first()
         assertThat(root.folders.map { it.folder.id }).containsExactly(a)
         assertThat(root.folders.single().documentCount).isEqualTo(1)

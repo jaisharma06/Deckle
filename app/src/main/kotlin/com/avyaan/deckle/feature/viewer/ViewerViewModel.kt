@@ -48,6 +48,10 @@ data class ViewerPageUi(
     val mode: EnhancementMode,
     val adjustments: Adjustments,
     val name: String? = null,
+    val widthPx: Int = 1,
+    val heightPx: Int = 1,
+    /** NV-41: drawn over the page so the viewer shows what an export will contain. */
+    val markup: com.avyaan.deckle.domain.markup.PageMarkup? = null,
 )
 
 data class ViewerUiState(
@@ -68,6 +72,7 @@ sealed interface ViewerEvent {
     data class PageChanged(val index: Int) : ViewerEvent
     data object ToggleChrome : ViewerEvent
     data object Recrop : ViewerEvent
+    data object Markup : ViewerEvent
     data class SetFilterOpen(val open: Boolean) : ViewerEvent
     data class ApplyFilter(val mode: EnhancementMode, val adjustments: Adjustments) : ViewerEvent
     data object Rotate : ViewerEvent
@@ -80,6 +85,7 @@ sealed interface ViewerEvent {
 
 sealed interface ViewerEffect {
     data class OpenRecrop(val pageId: String) : ViewerEffect
+    data class OpenMarkup(val pageId: String) : ViewerEffect
     data class OpenInsert(val documentId: String, val afterPageId: String) : ViewerEffect
     data class PageDeleted(val pageId: String) : ViewerEffect
     data class Message(val text: UiText) : ViewerEffect
@@ -115,7 +121,7 @@ class ViewerViewModel @Inject constructor(
         val index = visible.indexOfFirst { it.id == l.currentPageId }.takeIf { it >= 0 } ?: l.lastIndex.coerceIn(0, (visible.size - 1).coerceAtLeast(0))
         ViewerUiState(
             loading = false,
-            pages = visible.map { ViewerPageUi(it.id, it.processedPath, it.sourcePath != null, it.mode, it.adjustments, it.name) }.toImmutableList(),
+            pages = visible.map { ViewerPageUi(it.id, it.processedPath, it.sourcePath != null, it.mode, it.adjustments, it.name, it.widthPx, it.heightPx, it.markup) }.toImmutableList(),
             currentIndex = index,
             chromeVisible = l.chrome,
             busyPageId = l.busy,
@@ -145,6 +151,7 @@ class ViewerViewModel @Inject constructor(
             }
             ViewerEvent.Rotate -> current()?.let { p -> runBusy(p.id) { rotate(p.id, clockwise = true) } }
             ViewerEvent.InsertAfter -> current()?.let { send(ViewerEffect.OpenInsert(route.documentId, it.id)) }
+            ViewerEvent.Markup -> current()?.let { send(ViewerEffect.OpenMarkup(it.id)) }
             is ViewerEvent.Rename -> current()?.let { p -> viewModelScope.launch { renamePage(p.id, event.name) } }
             ViewerEvent.Delete -> current()?.let { p ->
                 local.update { it.copy(hidden = it.hidden + p.id) }

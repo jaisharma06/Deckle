@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
@@ -112,6 +113,12 @@ data class DocumentCardModel(
     val subtitle: String,
     val coverPath: String?,
     val snippet: Snippet?,
+    /** NV-03. */
+    val pinned: Boolean = false,
+    /** NV-30: colours of the document's tags, shown as dots. */
+    val tagColors: kotlinx.collections.immutable.ImmutableList<com.avyaan.deckle.domain.tag.TagColor> = kotlinx.collections.immutable.persistentListOf(),
+    /** NV-32: days until expiry when within the "soon" window (negative = expired); null hides the badge. */
+    val expiresInDays: Long? = null,
 )
 
 /**
@@ -174,6 +181,8 @@ fun DocumentCard(
                 Box(Modifier.fillMaxSize().shimmer().semantics { contentDescription = coverLabel })
             }
             if (size != TileSize.SMALL) CountBadge(model.pageCount, Modifier.align(Alignment.BottomEnd).padding(Spacing.s))
+            CardMarks(model, size, Modifier.align(Alignment.TopStart).padding(Spacing.s))
+            if (model.tagColors.isNotEmpty()) TagDots(model.tagColors, Modifier.align(Alignment.BottomStart).padding(Spacing.s))
             androidx.compose.animation.AnimatedVisibility(
                 selected,
                 enter = scaleIn(deckleSpring(DeckleMotion.Spring.Pop)) + fadeIn(),
@@ -212,6 +221,58 @@ fun DocumentCard(
         }
     }
 }
+
+/** NV-03 / NV-32: a pin and an expiry badge in the cover's top-left corner. */
+@Composable
+private fun CardMarks(model: DocumentCardModel, size: TileSize, modifier: Modifier = Modifier) {
+    val days = model.expiresInDays
+    if (!model.pinned && days == null) return
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(Spacing.xs), verticalAlignment = Alignment.CenterVertically) {
+        if (model.pinned) {
+            Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary, shadowElevation = 2.dp) {
+                Icon(DeckleIcons.Pin, stringResource(R.string.cd_pinned), Modifier.padding(4.dp).size(14.dp))
+            }
+        }
+        if (days != null && size != TileSize.SMALL) {
+            val urgent = days <= 30
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = if (urgent) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.tertiaryContainer,
+                contentColor = if (urgent) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onTertiaryContainer,
+                shadowElevation = 2.dp,
+            ) {
+                Text(
+                    expiryShort(days),
+                    style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                )
+            }
+        }
+    }
+}
+
+/** "12 d", "Today", "Expired": short enough for a small cover. */
+@Composable
+fun expiryShort(days: Long): String = when {
+    days < 0 -> stringResource(R.string.expiry_short_expired)
+    days == 0L -> stringResource(R.string.expiry_short_today)
+    else -> stringResource(R.string.expiry_short_days, days)
+}
+
+@Composable
+private fun TagDots(colors: List<com.avyaan.deckle.domain.tag.TagColor>, modifier: Modifier = Modifier) {
+    Row(
+        modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.85f))
+            .padding(horizontal = 4.dp, vertical = 3.dp),
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
+    ) {
+        colors.take(MAX_DOTS).forEach { com.avyaan.deckle.feature.tags.TagDot(it, size = 8) }
+    }
+}
+
+private const val MAX_DOTS = 5
 
 fun Snippet.annotated(highlight: SpanStyle): AnnotatedString = buildAnnotatedString {
     append(text)

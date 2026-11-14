@@ -35,4 +35,29 @@ internal object Migrations {
             db.execSQL("CREATE INDEX IF NOT EXISTS `index_folders_parentId` ON `folders` (`parentId`)")
         }
     }
+
+    /**
+     * v4 (phases 3 and 4): pins, expiry dates, tags and page markup. Additive only: every existing document
+     * starts unpinned, untagged and without an expiry date; every page without marks.
+     */
+    val V3_TO_V4: Migration = object : Migration(3, 4) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE `documents` ADD COLUMN `pinned` INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE `documents` ADD COLUMN `expiresAt` INTEGER DEFAULT NULL")
+            db.execSQL("ALTER TABLE `documents` ADD COLUMN `expiryNotifiedDays` INTEGER DEFAULT NULL")
+            db.execSQL("ALTER TABLE `folders` ADD COLUMN `pinned` INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE `pages` ADD COLUMN `markupJson` TEXT DEFAULT NULL")
+            db.execSQL(
+                "CREATE TABLE IF NOT EXISTS `tags` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `color` TEXT NOT NULL, " +
+                    "`createdAt` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+            )
+            db.execSQL(
+                "CREATE TABLE IF NOT EXISTS `document_tags` (`documentId` TEXT NOT NULL, `tagId` TEXT NOT NULL, " +
+                    "PRIMARY KEY(`documentId`, `tagId`), " +
+                    "FOREIGN KEY(`documentId`) REFERENCES `documents`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , " +
+                    "FOREIGN KEY(`tagId`) REFERENCES `tags`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+            )
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_document_tags_tagId` ON `document_tags` (`tagId`)")
+        }
+    }
 }

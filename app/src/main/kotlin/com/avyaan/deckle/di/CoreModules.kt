@@ -82,6 +82,10 @@ abstract class CoreBindings {
     @Binds @Singleton abstract fun pages(impl: RoomPageRepository): PageRepository
     @Binds @Singleton abstract fun exportHistory(impl: RoomExportHistoryRepository): ExportHistoryRepository
     @Binds @Singleton abstract fun folders(impl: RoomFolderRepository): FolderRepository
+    @Binds @Singleton abstract fun tags(impl: com.avyaan.deckle.data.db.RoomTagRepository): com.avyaan.deckle.domain.tag.TagRepository
+    @Binds abstract fun signatures(impl: com.avyaan.deckle.data.markup.EncryptedSignatureStore): com.avyaan.deckle.domain.markup.SignatureStore
+    @Binds abstract fun secretBox(impl: com.avyaan.deckle.data.markup.KeystoreSecretBox): com.avyaan.deckle.data.markup.SecretBox
+    @Binds abstract fun reminders(impl: com.avyaan.deckle.data.reminder.AndroidReminderNotifier): com.avyaan.deckle.domain.reminder.ReminderNotifier
     @Binds @Singleton abstract fun files(impl: AndroidPageFileStore): PageFileStore
     @Binds abstract fun sessions(impl: JsonScanSessionStore): ScanSessionStore
     @Binds abstract fun settings(impl: DataStoreSettingsRepository): SettingsRepository

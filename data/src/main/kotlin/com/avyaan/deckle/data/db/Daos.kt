@@ -14,7 +14,10 @@ private const val SUMMARY_COLUMNS = """
         (SELECT thumbPath FROM pages WHERE id = d.coverPageId),
         (SELECT thumbPath FROM pages WHERE documentId = d.id ORDER BY orderIndex LIMIT 1)
     ) AS coverThumbPath,
-    EXISTS(SELECT 1 FROM pages p WHERE p.documentId = d.id AND LENGTH(TRIM(p.ocrPlainText)) > 0) AS hasText
+    EXISTS(SELECT 1 FROM pages p WHERE p.documentId = d.id AND LENGTH(TRIM(p.ocrPlainText)) > 0) AS hasText,
+    d.pinned, d.expiresAt,
+    (SELECT GROUP_CONCAT(t.tagId) FROM document_tags t WHERE t.documentId = d.id) AS tagIds,
+    EXISTS(SELECT 1 FROM pages p WHERE p.documentId = d.id AND p.markupJson LIKE '%"type":"signature"%') AS signed
 """
 
 @Dao
@@ -93,6 +96,23 @@ public interface DocumentDao {
 
     @Query("UPDATE documents SET folderId = NULL WHERE folderId IN (:folderIds)")
     public suspend fun detachFrom(folderIds: List<String>)
+
+    /** NV-31: every live document, whatever its folder. */
+    @Query("SELECT $SUMMARY_COLUMNS, NULL AS snippet, 0 AS matchRank FROM documents d WHERE d.deletedAt IS NULL ORDER BY d.createdAt DESC")
+    public fun allLive(): Flow<List<DocumentSummaryRow>>
+
+    // Pinning and reminders aren't edits either: modifiedAt stays.
+    @Query("UPDATE documents SET pinned = :pinned WHERE id IN (:ids)")
+    public suspend fun setPinned(ids: List<String>, pinned: Boolean)
+
+    @Query("UPDATE documents SET expiresAt = :expiresAt, expiryNotifiedDays = :notified WHERE id = :id")
+    public suspend fun setExpiry(id: String, expiresAt: Long?, notified: Int?)
+
+    @Query("UPDATE documents SET expiryNotifiedDays = :days WHERE id = :id")
+    public suspend fun setExpiryNotified(id: String, days: Int)
+
+    @Query("SELECT * FROM documents WHERE deletedAt IS NULL AND expiresAt IS NOT NULL")
+    public suspend fun withExpiry(): List<DocumentEntity>
 }
 
 @Dao
@@ -123,6 +143,36 @@ public interface FolderDao {
 
     @Query("DELETE FROM folders WHERE id IN (:ids)")
     public suspend fun delete(ids: List<String>)
+
+    @Query("UPDATE folders SET pinned = :pinned WHERE id IN (:ids)")
+    public suspend fun setPinned(ids: List<String>, pinned: Boolean)
+}
+
+@Dao
+public interface TagDao {
+    @Query("SELECT * FROM tags ORDER BY name COLLATE NOCASE")
+    public fun observeAll(): Flow<List<TagEntity>>
+
+    @Query("SELECT * FROM tags ORDER BY name COLLATE NOCASE")
+    public suspend fun all(): List<TagEntity>
+
+    @Insert
+    public suspend fun insert(tag: TagEntity)
+
+    @Query("UPDATE tags SET name = :name, color = :color WHERE id = :id")
+    public suspend fun update(id: String, name: String, color: String)
+
+    @Query("DELETE FROM tags WHERE id = :id")
+    public suspend fun delete(id: String)
+
+    @Query("SELECT tagId FROM document_tags WHERE documentId = :documentId")
+    public fun observeTagsOf(documentId: String): Flow<List<String>>
+
+    @Query("DELETE FROM document_tags WHERE documentId = :documentId")
+    public suspend fun clearTagsOf(documentId: String)
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    public suspend fun link(links: List<DocumentTagEntity>)
 }
 
 @Dao
@@ -144,6 +194,9 @@ public interface PageDao {
 
     @Query("UPDATE pages SET name = :name WHERE id = :id")
     public suspend fun rename(id: String, name: String?)
+
+    @Query("UPDATE pages SET markupJson = :json WHERE id = :id")
+    public suspend fun setMarkup(id: String, json: String?)
 
     @Query("UPDATE pages SET orderIndex = :orderIndex WHERE id = :id")
     public suspend fun updateOrder(id: String, orderIndex: Long)

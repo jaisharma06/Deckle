@@ -10,8 +10,11 @@ import com.avyaan.deckle.domain.document.TransactionRunner
 import javax.inject.Inject
 
 @Database(
-    entities = [DocumentEntity::class, PageEntity::class, PageFtsEntity::class, ExportRecordEntity::class, FolderEntity::class],
-    version = 3,
+    entities = [
+        DocumentEntity::class, PageEntity::class, PageFtsEntity::class, ExportRecordEntity::class, FolderEntity::class,
+        TagEntity::class, DocumentTagEntity::class,
+    ],
+    version = 4,
     exportSchema = true,
 )
 public abstract class DeckleDatabase : RoomDatabase() {
@@ -19,6 +22,7 @@ public abstract class DeckleDatabase : RoomDatabase() {
     public abstract fun pages(): PageDao
     public abstract fun exportHistory(): ExportHistoryDao
     public abstract fun folders(): FolderDao
+    public abstract fun tags(): TagDao
 
     public companion object {
         public const val NAME: String = "deckle.db"
@@ -27,7 +31,7 @@ public abstract class DeckleDatabase : RoomDatabase() {
          * Every schema change needs a written Migration here. Destructive fallback is banned (CI greps for it):
          * for this app it would silently delete the user's only copy of their documents.
          */
-        public val MIGRATIONS: Array<Migration> = arrayOf(Migrations.V1_TO_V2, Migrations.V2_TO_V3)
+        public val MIGRATIONS: Array<Migration> = arrayOf(Migrations.V1_TO_V2, Migrations.V2_TO_V3, Migrations.V3_TO_V4)
 
         public fun build(context: Context): DeckleDatabase =
             Room.databaseBuilder(context, DeckleDatabase::class.java, NAME)

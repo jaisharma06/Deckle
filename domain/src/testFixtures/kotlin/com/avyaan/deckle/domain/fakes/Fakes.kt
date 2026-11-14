@@ -28,6 +28,7 @@ import java.time.Instant
 import java.time.ZoneId
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 
 class FakeClock(var instant: Instant = Instant.parse("2026-11-11T10:00:00Z")) : Clock {
@@ -94,16 +95,24 @@ class FakeFileStore : PageFileStore {
 class FakeDocumentRepository(private val pages: FakePageRepository) : DocumentRepository {
     val docs = MutableStateFlow<Map<String, Document>>(emptyMap())
 
+    /** Tag ids per document, as the Room join table would report them. */
+    val tagsOf = mutableMapOf<String, Set<String>>()
+    /** Bumped when something outside [docs] (tags) changes, so observers re-query like Room's invalidation. */
+    val tick = MutableStateFlow(0)
+
     private fun summary(d: Document) = DocumentSummary(
         d.id, d.title, pages.all().count { it.documentId == d.id }, d.createdAt, d.modifiedAt, d.deletedAt, null,
+        hasText = pages.all().any { it.documentId == d.id && !pages.plainText(it.id).isNullOrBlank() },
+        pinned = d.pinned, expiresAt = d.expiresAt, tagIds = tagsOf[d.id].orEmpty(),
+        signed = pages.all().any { it.documentId == d.id && it.markup?.signed == true },
     )
 
     override fun observeLibrary(sort: SortOrder, folderId: String?): Flow<List<DocumentSummary>> =
-        docs.map { m -> m.values.filter { it.deletedAt == null && it.folderId == folderId }.sortedByDescending { it.createdAt }.map(::summary) }
+        combine(docs, tick) { m, _ -> m.values.filter { it.deletedAt == null && it.folderId == folderId }.sortedByDescending { it.createdAt }.map(::summary) }
     override fun search(titleQuery: String, ftsQuery: String?, sort: SortOrder) =
-        docs.map { m -> m.values.filter { it.deletedAt == null && it.title.contains(titleQuery, true) }.map(::summary) }
+        combine(docs, tick) { m, _ -> m.values.filter { it.deletedAt == null && it.title.contains(titleQuery, true) }.map(::summary) }
     override fun observeDocument(id: String) = docs.map { it[id] }
-    override fun observeTrash() = docs.map { m -> m.values.filter { it.deletedAt != null }.map(::summary) }
+    override fun observeTrash() = combine(docs, tick) { m, _ -> m.values.filter { it.deletedAt != null }.map(::summary) }
     override suspend fun get(id: String) = docs.value[id]
     override suspend fun create(id: String, title: String, at: Instant, folderId: String?): Document =
         Document(id, title, at, at, null, null, folderId).also { docs.value += id to it }
@@ -122,6 +131,13 @@ class FakeDocumentRepository(private val pages: FakePageRepository) : DocumentRe
         ids.forEach { id -> edit(id) { it.copy(folderId = folderId) } }
     override suspend fun liveIdsIn(folderIds: Collection<String>) =
         docs.value.values.filter { it.deletedAt == null && it.folderId in folderIds }.map { it.id }
+
+    override fun observeAllLive() = combine(docs, tick) { m, _ -> m.values.filter { it.deletedAt == null }.sortedByDescending { it.createdAt }.map(::summary) }
+    override suspend fun setPinned(ids: List<String>, pinned: Boolean) = ids.forEach { id -> edit(id) { it.copy(pinned = pinned) } }
+    override suspend fun setExpiry(id: String, expiresAt: Instant?, notifiedDays: Int?) =
+        edit(id) { it.copy(expiresAt = expiresAt, expiryNotifiedDays = notifiedDays) }
+    override suspend fun setExpiryNotified(id: String, days: Int) = edit(id) { it.copy(expiryNotifiedDays = days) }
+    override suspend fun withExpiry() = docs.value.values.filter { it.deletedAt == null && it.expiresAt != null }
 
     /** What the Room repository does when folder rows go away. */
     fun detachFrom(folderIds: Collection<String>) =
@@ -146,6 +162,7 @@ class FakePageRepository : PageRepository {
     override suspend fun insert(pages: List<Page>) { this.pages.value += pages.associateBy { it.id } }
     override suspend fun update(page: Page) { pages.value += page.id to page }
     override suspend fun rename(pageId: String, name: String?) { get(pageId)?.let { update(it.copy(name = name)) } }
+    override suspend fun setMarkup(pageId: String, markup: com.avyaan.deckle.domain.markup.PageMarkup?) { get(pageId)?.let { update(it.copy(markup = markup)) } }
     override suspend fun updateOrder(pageId: String, orderIndex: Long) { get(pageId)?.let { update(it.copy(orderIndex = orderIndex)) } }
     override suspend fun updateOrders(orders: Map<String, Long>) = orders.forEach { (id, i) -> updateOrder(id, i) }
     override suspend fun moveToDocument(pageIds: List<String>, documentId: String) =
@@ -227,5 +244,32 @@ class FakeFolderRepository(private val docs: FakeDocumentRepository) : com.avyaa
     override suspend fun delete(ids: List<String>) {
         folders.value -= ids.toSet()
         docs.detachFrom(ids)
+    }
+    override suspend fun setPinned(ids: List<String>, pinned: Boolean) = ids.forEach { id ->
+        folders.value[id]?.let { folders.value += id to it.copy(pinned = pinned) }
+    }
+}
+
+class FakeTagRepository(private val docs: FakeDocumentRepository) : com.avyaan.deckle.domain.tag.TagRepository {
+    val tags = MutableStateFlow<Map<String, com.avyaan.deckle.domain.tag.Tag>>(emptyMap())
+    override fun observeAll() = tags.map { m -> m.values.sortedBy { it.name.lowercase() } }
+    override suspend fun all() = tags.value.values.sortedBy { it.name.lowercase() }
+    override suspend fun create(tag: com.avyaan.deckle.domain.tag.Tag) { tags.value += tag.id to tag }
+    override suspend fun update(id: String, name: String, color: com.avyaan.deckle.domain.tag.TagColor) {
+        tags.value[id]?.let { tags.value += id to it.copy(name = name, color = color) }
+    }
+    override suspend fun delete(id: String) {
+        tags.value -= id
+        docs.tagsOf.replaceAll { _, set -> set - id }
+        docs.tick.value++
+    }
+    override fun observeTagsOf(documentId: String) = docs.tick.map { docs.tagsOf[documentId].orEmpty() }
+    override suspend fun setTags(documentId: String, tagIds: Set<String>) {
+        docs.tagsOf[documentId] = tagIds
+        docs.tick.value++
+    }
+    override suspend fun addTag(documentIds: List<String>, tagId: String) {
+        documentIds.forEach { docs.tagsOf[it] = docs.tagsOf[it].orEmpty() + tagId }
+        docs.tick.value++
     }
 }

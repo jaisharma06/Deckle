@@ -14,6 +14,19 @@ import com.avyaan.deckle.domain.document.MoveToTrashUseCase
 import com.avyaan.deckle.domain.document.ObserveLibraryUseCase
 import com.avyaan.deckle.domain.document.RestoreDocumentsUseCase
 import com.avyaan.deckle.domain.document.SortOrder
+import com.avyaan.deckle.domain.document.LibraryFilter
+import com.avyaan.deckle.domain.document.PinUseCase
+import com.avyaan.deckle.domain.document.SmartCollection
+import com.avyaan.deckle.domain.reminder.ExpiryPolicy
+import com.avyaan.deckle.domain.tag.CreateTagUseCase
+import com.avyaan.deckle.domain.tag.DeleteTagUseCase
+import com.avyaan.deckle.domain.tag.EditTagUseCase
+import com.avyaan.deckle.domain.tag.TagColor
+import com.avyaan.deckle.domain.tag.TagDocumentsUseCase
+import com.avyaan.deckle.domain.tag.TagRepository
+import com.avyaan.deckle.feature.tags.TagUi
+import com.avyaan.deckle.feature.tags.toUi
+import java.time.ZoneId
 import com.avyaan.deckle.domain.export.ExportArchive
 import com.avyaan.deckle.domain.folder.BuildFolderExportUseCase
 import com.avyaan.deckle.domain.folder.CreateFolderUseCase
@@ -63,6 +76,11 @@ data class LibraryUiState(
     val sort: SortOrder = SortOrder.CREATED_DESC,
     /** NV-04: show only documents with recognised text. */
     val textOnly: Boolean = false,
+    /** NV-31: the smart collection or tag the library is narrowed to (across all folders). */
+    val collection: SmartCollection? = null,
+    val tagFilter: String? = null,
+    /** NV-30: every tag, for the chips and pickers. */
+    val tags: ImmutableList<TagUi> = persistentListOf(),
     val layout: LibraryLayout = LibraryLayout.GRID,
     val selection: ImmutableSet<String> = persistentSetOf(),
     val folderSelection: ImmutableSet<String> = persistentSetOf(),
@@ -76,6 +94,12 @@ data class LibraryUiState(
     val allFolders: ImmutableList<Folder> = persistentListOf(),
 ) {
     val selecting: Boolean get() = selection.isNotEmpty() || folderSelection.isNotEmpty()
+    /** Pin when anything selected is unpinned; otherwise the action unpins. */
+    val selectionPinned: Boolean get() = (content as? LibraryContent.Items)?.let { items ->
+        val docs = items.documents.filter { it.card.id in selection }
+        val folders = items.folders.filter { it.id in folderSelection }
+        (docs.isNotEmpty() || folders.isNotEmpty()) && docs.all { it.card.pinned } && folders.all { it.pinned }
+    } ?: false
     val selectedCount: Int get() = selection.size + folderSelection.size
     val folderName: String? get() = path.lastOrNull()?.name
 }
@@ -91,18 +115,29 @@ sealed interface LibraryContent {
     data class NoResults(val query: String) : LibraryContent
     /** The "Has text" filter is on and nothing here has text. */
     data object NoText : LibraryContent
+    /** A smart collection or tag has nothing in it yet. */
+    data object NoMatches : LibraryContent
     data class Items(val folders: ImmutableList<FolderItem>, val documents: ImmutableList<LibraryItem>) : LibraryContent
 }
 
 /** The card model plus the instant the screen formats relative to "today" (formatting needs a Context). */
 data class LibraryItem(val card: DocumentCardModel, val date: Instant)
 
-data class FolderItem(val id: String, val name: String, val documentCount: Int, val folderCount: Int, val date: Instant)
+data class FolderItem(val id: String, val name: String, val documentCount: Int, val folderCount: Int, val date: Instant, val pinned: Boolean = false)
 
 sealed interface LibraryEvent {
     data class QueryChanged(val q: String) : LibraryEvent
     data class SortChanged(val s: SortOrder) : LibraryEvent
     data class TextOnlyChanged(val on: Boolean) : LibraryEvent
+    /** Null clears it. Choosing a collection clears a tag filter, and the other way round. */
+    data class CollectionChanged(val collection: SmartCollection?) : LibraryEvent
+    data class TagFilterChanged(val tagId: String?) : LibraryEvent
+    data class PinSelected(val pinned: Boolean) : LibraryEvent
+    data class TagSelected(val tagId: String) : LibraryEvent
+    /** Creates the tag (or finds it by name) and applies it to the selection. */
+    data class CreateTagForSelection(val name: String) : LibraryEvent
+    data class EditTag(val id: String, val name: String, val color: TagColor) : LibraryEvent
+    data class DeleteTag(val id: String) : LibraryEvent
     data class LayoutChanged(val layout: LibraryLayout) : LibraryEvent
     data class CardClicked(val id: String) : LibraryEvent
     data class CardLongPressed(val id: String) : LibraryEvent
@@ -154,6 +189,12 @@ class LibraryViewModel @Inject constructor(
     private val moveToFolder: MoveToFolderUseCase,
     private val deleteFolders: DeleteFoldersUseCase,
     private val buildFolderExport: BuildFolderExportUseCase,
+    tagRepository: TagRepository,
+    private val pin: PinUseCase,
+    private val createTag: CreateTagUseCase,
+    private val editTag: EditTagUseCase,
+    private val deleteTag: DeleteTagUseCase,
+    private val tagDocuments: TagDocumentsUseCase,
 ) : ViewModel() {
 
     /** Set by the folder destination's route argument; absent at the library root. */
@@ -161,6 +202,14 @@ class LibraryViewModel @Inject constructor(
 
     private val query: StateFlow<String> = savedState.getStateFlow(KEY_QUERY, "")
     private val textOnly: StateFlow<Boolean> = savedState.getStateFlow(KEY_TEXT_ONLY, false)
+    private val collection: StateFlow<String?> = savedState.getStateFlow(KEY_COLLECTION, null)
+    private val tagFilter: StateFlow<String?> = savedState.getStateFlow(KEY_TAG, null)
+    private val tags: StateFlow<List<TagUi>> = tagRepository.observeAll()
+        .map { list -> list.map { it.toUi() } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    private val filter: Flow<LibraryFilter> = combine(textOnly, collection, tagFilter) { text, c, t ->
+        LibraryFilter(textOnly = text, collection = c?.let { name -> SmartCollection.entries.firstOrNull { it.name == name } }, tagId = t)
+    }.distinctUntilChanged()
     private val selection: StateFlow<List<String>> = savedState.getStateFlow(KEY_SELECTION, emptyList())
     private val folderSelection: StateFlow<List<String>> = savedState.getStateFlow(KEY_FOLDER_SELECTION, emptyList())
     private val resumable = MutableStateFlow<ResumableSessionUi?>(null)
@@ -172,32 +221,38 @@ class LibraryViewModel @Inject constructor(
     val effects: Flow<LibraryEffect> = effectChannel.receiveAsFlow()
 
     // Typing debounces; clearing the field is instant so the grid comes straight back.
-    private val listing: Flow<Pair<String, LibraryListing>> = query
-        .debounce { if (it.isBlank()) 0L else SEARCH_DEBOUNCE_MS }
-        .map { it.trim() }
-        .distinctUntilChanged()
-        .flatMapLatest { q -> observeLibrary(q, folderId).map { q to it } }
+    private val listing: Flow<Pair<String, LibraryListing>> = combine(
+        query.debounce { if (it.isBlank()) 0L else SEARCH_DEBOUNCE_MS }.map { it.trim() }.distinctUntilChanged(),
+        filter,
+        ::Pair,
+    ).flatMapLatest { (q, f) -> observeLibrary(q, folderId, if (q.isBlank()) f else LibraryFilter.NONE).map { q to it } }
 
     val state: StateFlow<LibraryUiState> = combine(
-        listing, combine(query, textOnly, ::Pair), combine(selection, folderSelection, ::Pair), settings.settings, combine(resumable, highlight, ::Pair),
-    ) { (q, list), (rawQuery, onlyText), (sel, folderSel), s, (resume, glow) ->
+        listing, combine(query, filter, ::Pair), combine(selection, folderSelection, ::Pair), combine(settings.settings, tags, ::Pair), combine(resumable, highlight, ::Pair),
+    ) { (q, list), (rawQuery, f), (sel, folderSel), (s, allTags), (resume, glow) ->
         latest = list
-        // The filter chip sits beside the sort chip, which hides while searching; so does the filter.
-        val filtering = onlyText && q.isBlank()
-        val folders = if (filtering) emptyList() else list.folders.map { FolderItem(it.folder.id, it.folder.name, it.documentCount, it.folderCount, it.folder.dateFor(s.sortOrder)) }
-        val documents = if (filtering) list.documents.filter { it.hasText } else list.documents
+        // The filter chips sit beside the sort chip, which hides while searching; so do the filters.
+        val filtering = f.active && q.isBlank()
+        val folders = list.folders.map { FolderItem(it.folder.id, it.folder.name, it.documentCount, it.folderCount, it.folder.dateFor(s.sortOrder), it.folder.pinned) }
+        val documents = list.documents
+        val colours = allTags.associate { it.id to it.color }
+        val now = Instant.now()
         LibraryUiState(
             content = when {
                 folders.isNotEmpty() || documents.isNotEmpty() ->
-                    LibraryContent.Items(folders.toImmutableList(), documents.map { it.toItem(s.sortOrder) }.toImmutableList())
-                filtering && list.documents.isNotEmpty() -> LibraryContent.NoText
+                    LibraryContent.Items(folders.toImmutableList(), documents.map { it.toItem(s.sortOrder, colours, now) }.toImmutableList())
+                filtering && f.libraryWide -> LibraryContent.NoMatches
+                filtering -> LibraryContent.NoText
                 q.isNotBlank() -> LibraryContent.NoResults(q)
                 folderId != null -> LibraryContent.FolderEmpty
                 else -> LibraryContent.Empty
             },
             query = rawQuery,
             sort = s.sortOrder,
-            textOnly = onlyText,
+            textOnly = f.textOnly,
+            collection = f.collection,
+            tagFilter = f.tagId?.takeIf { id -> allTags.any { it.id == id } },
+            tags = allTags.toImmutableList(),
             layout = s.libraryLayout,
             selection = sel.toPersistentSet(),
             folderSelection = folderSel.toPersistentSet(),
@@ -228,6 +283,34 @@ class LibraryViewModel @Inject constructor(
             is LibraryEvent.QueryChanged -> savedState[KEY_QUERY] = event.q
             is LibraryEvent.SortChanged -> viewModelScope.launch { settings.update { it.copy(sortOrder = event.s) } }
             is LibraryEvent.TextOnlyChanged -> savedState[KEY_TEXT_ONLY] = event.on
+            is LibraryEvent.CollectionChanged -> {
+                savedState[KEY_COLLECTION] = event.collection?.name
+                if (event.collection != null) savedState[KEY_TAG] = null
+            }
+            is LibraryEvent.TagFilterChanged -> {
+                savedState[KEY_TAG] = event.tagId
+                if (event.tagId != null) savedState[KEY_COLLECTION] = null
+            }
+            is LibraryEvent.PinSelected -> {
+                val docs = selection.value
+                val folders = folderSelection.value
+                clearSelection()
+                viewModelScope.launch {
+                    pin(docs, folders, event.pinned)
+                    send(LibraryEffect.ShowMessage(UiText.Plural(if (event.pinned) R.plurals.library_pinned else R.plurals.library_unpinned, docs.size + folders.size)))
+                }
+            }
+            is LibraryEvent.TagSelected -> tagSelection(event.tagId)
+            is LibraryEvent.CreateTagForSelection -> viewModelScope.launch {
+                createTag(event.name)?.let { tagSelection(it.id) }
+            }
+            is LibraryEvent.EditTag -> viewModelScope.launch {
+                if (!editTag(event.id, event.name, event.color)) send(LibraryEffect.ShowMessage(UiText.Res(R.string.tags_name_taken)))
+            }
+            is LibraryEvent.DeleteTag -> viewModelScope.launch {
+                if (tagFilter.value == event.id) savedState[KEY_TAG] = null
+                deleteTag(event.id)
+            }
             is LibraryEvent.LayoutChanged -> viewModelScope.launch { settings.update { it.copy(libraryLayout = event.layout) } }
             is LibraryEvent.CardClicked ->
                 if (selecting()) toggle(KEY_SELECTION, event.id) else send(LibraryEffect.OpenDocument(event.id))
@@ -300,6 +383,17 @@ class LibraryViewModel @Inject constructor(
                     else -> LibraryEffect.ShowMessage(UiText.Plural(R.plurals.library_items_deleted, docs.size + folders.size), undo = docs.isNotEmpty())
                 },
             )
+        }
+    }
+
+    private fun tagSelection(tagId: String) {
+        val docs = selection.value
+        if (docs.isEmpty()) return
+        clearSelection()
+        viewModelScope.launch {
+            tagDocuments(docs, tagId)
+            val name = tags.value.firstOrNull { it.id == tagId }?.name.orEmpty()
+            send(LibraryEffect.ShowMessage(UiText.Plural(R.plurals.library_tagged, docs.size, listOf(docs.size, name))))
         }
     }
 
@@ -388,9 +482,18 @@ class LibraryViewModel @Inject constructor(
         effectChannel.trySend(effect)
     }
 
-    private fun DocumentSummary.toItem(sort: SortOrder): LibraryItem {
+    private fun DocumentSummary.toItem(sort: SortOrder, colours: Map<String, TagColor>, now: Instant): LibraryItem {
         val date = if (sort == SortOrder.MODIFIED_DESC) modifiedAt else createdAt
-        return LibraryItem(DocumentCardModel(id, title, pageCount, subtitle = "", coverPath = coverThumbPath, snippet = snippet), date)
+        val daysLeft = expiresAt?.let { ExpiryPolicy.daysLeft(it, now, ZoneId.systemDefault()) }?.takeIf { it <= ExpiryPolicy.SOON_DAYS }
+        return LibraryItem(
+            DocumentCardModel(
+                id, title, pageCount, subtitle = "", coverPath = coverThumbPath, snippet = snippet,
+                pinned = pinned,
+                tagColors = tagIds.mapNotNull { colours[it] }.sortedBy { it.ordinal }.toImmutableList(),
+                expiresInDays = daysLeft,
+            ),
+            date,
+        )
     }
 
     private fun Folder.dateFor(sort: SortOrder) = if (sort == SortOrder.MODIFIED_DESC) modifiedAt else createdAt
@@ -400,6 +503,8 @@ class LibraryViewModel @Inject constructor(
         const val KEY_FOLDER = "folderId"
         private const val KEY_QUERY = "query"
         private const val KEY_TEXT_ONLY = "text_only"
+        private const val KEY_COLLECTION = "collection"
+        private const val KEY_TAG = "tag"
         private const val KEY_SELECTION = "selection"
         private const val KEY_FOLDER_SELECTION = "folderSelection"
         private const val SEARCH_DEBOUNCE_MS = 200L

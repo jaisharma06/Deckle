@@ -29,6 +29,9 @@ import kotlinx.serialization.Serializable
 /** Re-crop of a committed page (FR-42). */
 @Serializable data class RecropDest(val pageId: String)
 
+/** NV-40…44: mark up, sign or redact one page. */
+@Serializable data class MarkupDest(val pageId: String)
+
 @Serializable data class ReviewDest(val sessionId: String, val captureId: String? = null)
 
 @Serializable data class DocumentDest(val documentId: String, val openExport: Boolean = false)

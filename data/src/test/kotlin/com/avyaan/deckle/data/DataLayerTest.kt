@@ -9,6 +9,12 @@ import com.avyaan.deckle.data.db.RoomFolderRepository
 import com.avyaan.deckle.domain.folder.Folder
 import com.avyaan.deckle.data.db.RoomPageRepository
 import com.avyaan.deckle.data.db.RoomTransactionRunner
+import com.avyaan.deckle.domain.tag.TagColor
+import com.avyaan.deckle.domain.tag.Tag
+import com.avyaan.deckle.domain.markup.SignatureInk
+import com.avyaan.deckle.domain.markup.PageMarkup
+import com.avyaan.deckle.domain.markup.MarkupItem
+import com.avyaan.deckle.data.db.RoomTagRepository
 import com.avyaan.deckle.data.files.AndroidFileJanitor
 import com.avyaan.deckle.data.files.AndroidPageFileStore
 import com.avyaan.deckle.data.files.FileLayout
@@ -199,5 +205,68 @@ class DataLayerTest {
         pages.setOcr("p1", OcrState(OcrStatus.DONE, emptyList(), 1), "hello world")
         pages.update(pages.get("p1")!!.copy(mode = EnhancementMode.GREYSCALE))
         assertThat(pages.documentText("a").text).isEqualTo("hello world")
+    }
+
+    // ---- Schema v4: phases 3 and 4 ----
+
+    @Test fun tagsPinsAndSignaturesReachTheLibraryRows() = runTest {
+        val tags = RoomTagRepository(db)
+        docs.create("a", "Electricity", clock.now())
+        docs.create("b", "Passport", clock.now().plusSeconds(1))
+        pages.insert(listOf(page("pa", "a", 1000), page("pb", "b", 1000)))
+        tags.create(Tag("bills", "Bills", TagColor.AMBER, clock.now()))
+        tags.create(Tag("ids", "IDs", TagColor.SKY, clock.now()))
+        tags.setTags("a", setOf("bills", "ids"))
+        docs.setPinned(listOf("b"), true)
+        val sig = MarkupItem.Signature("s", SignatureInk(listOf(listOf(0f, 0f, 1f, 0.2f)), 0.3f), 0.5f, 0.8f, 0.3f)
+        pages.setMarkup("pb", PageMarkup(listOf(sig)))
+
+        val rows = docs.observeAllLive().first().associateBy { it.id }
+        assertThat(rows.getValue("a").tagIds).containsExactly("bills", "ids")
+        assertThat(rows.getValue("a").signed).isFalse()
+        assertThat(rows.getValue("b").pinned).isTrue()
+        assertThat(rows.getValue("b").signed).isTrue()
+        assertThat(tags.observeTagsOf("a").first()).containsExactly("bills", "ids")
+
+        tags.delete("ids")                                              // links go with the tag
+        assertThat(docs.observeAllLive().first().first { it.id == "a" }.tagIds).containsExactly("bills")
+        tags.setTags("a", emptySet())
+        assertThat(docs.observeAllLive().first().first { it.id == "a" }.tagIds).isEmpty()
+    }
+
+    @Test fun purgingADocumentRemovesItsTagLinks() = runTest {
+        val tags = RoomTagRepository(db)
+        docs.create("a", "Old bill", clock.now())
+        tags.create(Tag("bills", "Bills", TagColor.AMBER, clock.now()))
+        tags.addTag(listOf("a"), "bills")
+        tags.addTag(listOf("a"), "bills")                               // twice is harmless
+        DeleteDocumentsPermanentlyUseCase(docs, files, RoomTransactionRunner(db))(listOf("a"))
+        db.query("SELECT COUNT(*) FROM document_tags", null).use { c -> c.moveToFirst(); assertThat(c.getInt(0)).isEqualTo(0) }
+        assertThat(tags.all()).hasSize(1)
+    }
+
+    @Test fun pageEditsKeepTheMarkup_andExpiryIsStored() = runTest {
+        docs.create("a", "Insurance", clock.now())
+        pages.insert(listOf(page("p1", "a", 1000)))
+        val markup = PageMarkup(listOf(MarkupItem.Redaction("r", 0.1f, 0.1f, 0.4f, 0.2f)))
+        pages.setMarkup("p1", markup)
+        pages.update(pages.get("p1")!!.copy(mode = EnhancementMode.GREYSCALE, markup = null))   // a stale copy
+        assertThat(pages.get("p1")!!.markup).isEqualTo(markup)
+
+        val at = clock.now().plusSeconds(86_400L * 40)
+        docs.setExpiry("a", at, 90)
+        assertThat(docs.withExpiry().single().expiresAt).isEqualTo(at)
+        assertThat(docs.get("a")!!.expiryNotifiedDays).isEqualTo(90)
+        docs.setExpiryNotified("a", 30)
+        assertThat(docs.get("a")!!.expiryNotifiedDays).isEqualTo(30)
+        docs.setExpiry("a", null, null)
+        assertThat(docs.withExpiry()).isEmpty()
+    }
+
+    @Test fun pinnedFoldersAreStored() = runTest {
+        val folders = RoomFolderRepository(db)
+        folders.create(Folder("f", "Bills", null, clock.now(), clock.now()))
+        folders.setPinned(listOf("f"), true)
+        assertThat(folders.get("f")!!.pinned).isTrue()
     }
 }

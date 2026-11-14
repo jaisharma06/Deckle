@@ -4,4 +4,14 @@
     <string name="notification_channel_export">Exports</string>
     <string name="notification_export_running">Exporting…</string>
     <string name="notification_export_done">Export ready</string>
+
+    <!-- NV-32 expiry reminders. -->
+    <string name="notification_channel_reminders">Expiry reminders</string>
+    <string name="reminder_title">%1$s</string>
+    <plurals name="reminder_days_left">
+        <item quantity="one">Expires tomorrow</item>
+        <item quantity="other">Expires in %1$d days</item>
+    </plurals>
+    <string name="reminder_today">Expires today</string>
+    <string name="reminder_expired">Has expired</string>
 </resources>

@@ -51,6 +51,9 @@ data class ExportUiState(
     val estimateBytes: Long? = null,
     val passwordOn: Boolean = false,
     val password: String = "",
+    /** NV-43: diagonal text over every exported page (PDF and images). */
+    val watermarkOn: Boolean = false,
+    val watermark: String = "",
     val confirm: String = "",
     val running: ExportProgress.Running? = null,
     val busy: Boolean = false,
@@ -66,7 +69,8 @@ data class ExportUiState(
         password != confirm -> PasswordProblem.MISMATCH
         else -> null
     }
-    val canExport: Boolean get() = ready && !busy && passwordProblem == null
+    val watermarkMissing: Boolean get() = watermarkOn && watermark.isBlank()
+    val canExport: Boolean get() = ready && !busy && passwordProblem == null && !watermarkMissing
 
     private companion object {
         const val MIN_PASSWORD = 4
@@ -81,6 +85,8 @@ sealed interface ExportEvent {
     data class SetPasswordOn(val on: Boolean) : ExportEvent
     data class SetPassword(val value: String) : ExportEvent
     data class SetConfirm(val value: String) : ExportEvent
+    data class SetWatermarkOn(val on: Boolean) : ExportEvent
+    data class SetWatermark(val value: String) : ExportEvent
     data object Share : ExportEvent
     /** Asks the screen for a destination (CreateDocument for one PDF, a folder otherwise). */
     data object Save : ExportEvent
@@ -158,6 +164,8 @@ class ExportViewModel @Inject constructor(
             is ExportEvent.SetPasswordOn -> _state.update { it.copy(passwordOn = event.on, password = "", confirm = "") }
             is ExportEvent.SetPassword -> _state.update { it.copy(password = event.value) }
             is ExportEvent.SetConfirm -> _state.update { it.copy(confirm = event.value) }
+            is ExportEvent.SetWatermarkOn -> _state.update { it.copy(watermarkOn = event.on) }
+            is ExportEvent.SetWatermark -> _state.update { it.copy(watermark = event.value.take(MAX_WATERMARK)) }
             ExportEvent.Share -> enqueue(ExportTarget.Share)
             ExportEvent.Save -> viewModelScope.launch {
                 val s = _state.value
@@ -205,6 +213,7 @@ class ExportViewModel @Inject constructor(
             hasPassword = password != null,
             target = target,
             archive = archive,
+            watermark = s.watermark.trim().takeIf { s.watermarkOn && it.isNotEmpty() },
         )
         scheduler.enqueue(request, password)
         password?.fill('\u0000')
@@ -235,3 +244,5 @@ class ExportViewModel @Inject constructor(
         effectChannel.trySend(effect)
     }
 }
+
+private const val MAX_WATERMARK = 60

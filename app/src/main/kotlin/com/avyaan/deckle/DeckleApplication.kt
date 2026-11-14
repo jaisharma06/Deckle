@@ -29,6 +29,8 @@ class DeckleApplication : Application(), Configuration.Provider {
         DataInitializer.init(this)
         super.onCreate()   // Hilt injection happens here
         Notifications.createChannels(this)
+        // NV-32: the daily expiry check (kept if already scheduled).
+        com.avyaan.deckle.data.reminder.ExpiryReminderWorker.schedule(this)
         // 3. Housekeeping off the startup path: never blocks the first frame.
         appScope.launch(dispatchers.io) { maintenance() }
     }

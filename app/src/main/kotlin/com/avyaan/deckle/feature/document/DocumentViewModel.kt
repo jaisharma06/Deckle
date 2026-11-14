@@ -19,6 +19,18 @@ import com.avyaan.deckle.domain.page.GetDocumentTextUseCase
 import com.avyaan.deckle.domain.page.ObservePagesUseCase
 import com.avyaan.deckle.domain.page.ReorderPageUseCase
 import com.avyaan.deckle.domain.settings.SettingsRepository
+import com.avyaan.deckle.domain.document.PinUseCase
+import com.avyaan.deckle.domain.reminder.SetExpiryUseCase
+import com.avyaan.deckle.domain.tag.CreateTagUseCase
+import com.avyaan.deckle.domain.tag.DeleteTagUseCase
+import com.avyaan.deckle.domain.tag.EditTagUseCase
+import com.avyaan.deckle.domain.tag.SetDocumentTagsUseCase
+import com.avyaan.deckle.domain.tag.TagColor
+import com.avyaan.deckle.domain.tag.TagRepository
+import com.avyaan.deckle.feature.tags.TagUi
+import com.avyaan.deckle.feature.tags.toUi
+import java.time.LocalDate
+import java.time.ZoneId
 import com.avyaan.deckle.navigation.DocumentDest
 import com.avyaan.deckle.ui.UiText
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -43,7 +55,15 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-data class PageTileUi(val id: String, val thumbPath: String, val ocr: OcrStatus, val hasSource: Boolean, val name: String? = null)
+data class PageTileUi(
+    val id: String,
+    val thumbPath: String,
+    val ocr: OcrStatus,
+    val hasSource: Boolean,
+    val name: String? = null,
+    /** NV-41: the page has marks; thumbnails don't show them, so the tile gets a badge. */
+    val marked: Boolean = false,
+)
 
 data class DocumentUiState(
     val loading: Boolean = true,
@@ -55,6 +75,11 @@ data class DocumentUiState(
     val selection: ImmutableSet<String> = persistentSetOf(),
     val selecting: Boolean = false,
     val secure: Boolean = true,
+    val pinned: Boolean = false,
+    /** NV-32: the expiry day, in the device's zone. */
+    val expiresOn: LocalDate? = null,
+    val tags: ImmutableList<TagUi> = persistentListOf(),
+    val allTags: ImmutableList<TagUi> = persistentListOf(),
 )
 
 sealed interface DocumentEvent {
@@ -74,6 +99,14 @@ sealed interface DocumentEvent {
     data object AddPages : DocumentEvent
     data object Delete : DocumentEvent
     data class SetSelecting(val on: Boolean) : DocumentEvent
+    data object TogglePin : DocumentEvent
+    data class ToggleTag(val tagId: String) : DocumentEvent
+    data class CreateTag(val name: String) : DocumentEvent
+    data class EditTag(val id: String, val name: String, val color: TagColor) : DocumentEvent
+    data class DeleteTag(val id: String) : DocumentEvent
+    /** Null clears the expiry date. */
+    data class SetExpiry(val date: LocalDate?) : DocumentEvent
+    data class MarkupPage(val pageId: String) : DocumentEvent
     data class ToggleSelect(val pageId: String) : DocumentEvent
     data object DeleteSelectedPages : DocumentEvent
 }
@@ -82,6 +115,7 @@ sealed interface DocumentEffect {
     data class OpenPage(val documentId: String, val pageId: String) : DocumentEffect
     data class OpenCapture(val documentId: String, val afterPageId: String?) : DocumentEffect
     data class OpenRecrop(val pageId: String) : DocumentEffect
+    data class OpenMarkup(val pageId: String) : DocumentEffect
     data class CopyToClipboard(val text: String, val message: UiText) : DocumentEffect
     data class Message(val text: UiText) : DocumentEffect
     data object RenameRejected : DocumentEffect
@@ -104,6 +138,13 @@ class DocumentViewModel @Inject constructor(
     private val deletePage: DeletePageUseCase,
     private val renamePage: RenamePageUseCase,
     private val duplicatePage: com.avyaan.deckle.domain.page.DuplicatePageUseCase,
+    private val tagRepository: TagRepository,
+    private val createTag: CreateTagUseCase,
+    private val editTag: EditTagUseCase,
+    private val deleteTag: DeleteTagUseCase,
+    private val setTags: SetDocumentTagsUseCase,
+    private val pin: PinUseCase,
+    private val setExpiry: SetExpiryUseCase,
 ) : ViewModel() {
 
     private val route = savedState.toRoute<DocumentDest>()
@@ -116,10 +157,16 @@ class DocumentViewModel @Inject constructor(
     private val effectChannel = Channel<DocumentEffect>(Channel.BUFFERED)
     val effects: Flow<DocumentEffect> = effectChannel.receiveAsFlow()
 
+    private val tagState = combine(tagRepository.observeAll(), tagRepository.observeTagsOf(documentId), ::Pair)
+
     val state: StateFlow<DocumentUiState> = combine(
-        observeDocument(documentId), observePages(documentId), dragOrder, local, settings.settings,
-    ) { doc, pages, drag, l, s ->
-        val tiles = pages.sortedBy { it.orderIndex }.map { PageTileUi(it.id, it.thumbPath, it.ocr.status, it.sourcePath != null, it.name) }
+        combine(observeDocument(documentId), tagState, ::Pair), observePages(documentId), dragOrder, local, settings.settings,
+    ) { (doc, tagPair), pages, drag, l, s ->
+        val (all, mine) = tagPair
+        val allUi = all.map { it.toUi() }
+        val tiles = pages.sortedBy { it.orderIndex }.map {
+            PageTileUi(it.id, it.thumbPath, it.ocr.status, it.sourcePath != null, it.name, marked = it.markup?.isEmpty == false)
+        }
         val ordered = drag?.let { order -> order.mapNotNull { id -> tiles.firstOrNull { it.id == id } } } ?: tiles
         DocumentUiState(
             loading = false,
@@ -131,6 +178,10 @@ class DocumentViewModel @Inject constructor(
             selection = l.selection.toPersistentSet(),
             selecting = l.selecting,
             secure = s.secureScreens,
+            pinned = doc?.pinned == true,
+            expiresOn = doc?.expiresAt?.atZone(ZoneId.systemDefault())?.toLocalDate(),
+            tags = allUi.filter { it.id in mine }.toImmutableList(),
+            allTags = allUi.toImmutableList(),
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DocumentUiState())
 
@@ -188,6 +239,28 @@ class DocumentViewModel @Inject constructor(
                 send(DocumentEffect.Deleted)
             }
             is DocumentEvent.SetSelecting -> local.update { Local(selecting = event.on) }
+            DocumentEvent.TogglePin -> viewModelScope.launch {
+                val pinned = !state.value.pinned
+                pin(listOf(documentId), emptyList(), pinned)
+                send(DocumentEffect.Message(UiText.Plural(if (pinned) R.plurals.library_pinned else R.plurals.library_unpinned, 1)))
+            }
+            is DocumentEvent.ToggleTag -> viewModelScope.launch {
+                val current = state.value.tags.map { it.id }.toSet()
+                setTags(documentId, if (event.tagId in current) current - event.tagId else current + event.tagId)
+            }
+            is DocumentEvent.CreateTag -> viewModelScope.launch {
+                val tag = createTag(event.name) ?: return@launch
+                setTags(documentId, state.value.tags.map { it.id }.toSet() + tag.id)
+            }
+            is DocumentEvent.EditTag -> viewModelScope.launch {
+                if (!editTag(event.id, event.name, event.color)) send(DocumentEffect.Message(UiText.Res(R.string.tags_name_taken)))
+            }
+            is DocumentEvent.DeleteTag -> viewModelScope.launch { deleteTag(event.id) }
+            is DocumentEvent.SetExpiry -> viewModelScope.launch {
+                setExpiry(documentId, event.date)
+                send(DocumentEffect.Message(UiText.Res(if (event.date == null) R.string.expiry_cleared else R.string.expiry_set)))
+            }
+            is DocumentEvent.MarkupPage -> send(DocumentEffect.OpenMarkup(event.pageId))
             is DocumentEvent.ToggleSelect -> toggle(event.pageId)
             DocumentEvent.DeleteSelectedPages -> {
                 val ids = local.value.selection

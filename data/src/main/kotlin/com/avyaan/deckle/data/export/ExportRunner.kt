@@ -47,6 +47,7 @@ public class ExportRunner @Inject constructor(
     private val bitmaps: BitmapIO,
     private val layout: FileLayout,
     private val dispatchers: DispatcherProvider,
+    private val compositor: MarkupCompositor,
 ) {
     public suspend fun run(request: ExportRequest, password: CharArray?, onProgress: (done: Int, total: Int) -> Unit): Outcome<ExportOutput> {
         val jobs = request.documentIds.mapNotNull { id ->
@@ -58,13 +59,32 @@ public class ExportRunner @Inject constructor(
         if (jobs.isEmpty()) return Outcome.Failure(DeckleError.NotFound)
 
         val dir = File(layout.exportsDir, request.exportId).apply { deleteRecursively(); mkdirs() }
+        val archive = request.archive
+        // A folder export writes its parts below `parts/`, mirroring the folder tree, then packs them.
+        val partsRoot = if (archive != null) File(dir, PARTS) else dir
+        // Pages with markup or a watermark are composited here first (NV-40…43), then removed.
+        val markupDir = File(dir, MARKUP)
+        try {
+            return runJobs(request, password, jobs, dir, partsRoot, markupDir, onProgress)
+        } finally {
+            markupDir.deleteRecursively()
+        }
+    }
+
+    private suspend fun runJobs(
+        request: ExportRequest,
+        password: CharArray?,
+        jobs: List<Job>,
+        dir: File,
+        partsRoot: File,
+        markupDir: File,
+        onProgress: (done: Int, total: Int) -> Unit,
+    ): Outcome<ExportOutput> {
         val total = jobs.sumOf { it.pages.size }
         var done = 0
         val names = UniqueNames()
         val produced = mutableListOf<File>()
         val archive = request.archive
-        // A folder export writes its parts below `parts/`, mirroring the folder tree, then packs them.
-        val partsRoot = if (archive != null) File(dir, PARTS) else dir
 
         for ((docId, title, docPages) in jobs) {
             val subdir = archive?.directories?.get(docId).orEmpty()
@@ -72,7 +92,12 @@ public class ExportRunner @Inject constructor(
             when (request.format) {
                 ExportFormat.PDF -> {
                     val out = File(outDir, names.next(TitleRules.fileName(title), "pdf", subdir))
-                    val pdf = PdfRequest(docPages.map { it.toPdfInput() }, request.pageSize, request.quality, password)
+                    val inputs = try {
+                        withContext(dispatchers.io) { docPages.map { it.toPdfInput(request, markupDir) } }
+                    } catch (e: Exception) {
+                        return Outcome.Failure(DeckleError.ExportFailed(e.javaClass.simpleName))
+                    }
+                    val pdf = PdfRequest(inputs, request.pageSize, request.quality, password)
                     val base = done
                     when (val r = composer.compose(pdf, out.path) { d, _ -> onProgress(base + d, total) }) {
                         is Outcome.Failure -> return r
@@ -89,7 +114,7 @@ public class ExportRunner @Inject constructor(
                             ?: "${TitleRules.fileName(title)} - ${(i + 1).toString().padStart(width, '0')}"
                         val name = names.next(stem, ext, subdir)
                         val out = File(outDir, name)
-                        if (!writeImage(page, out, request)) return Outcome.Failure(DeckleError.ExportFailed("encode"))
+                        if (!writeImage(page, out, request, markupDir)) return Outcome.Failure(DeckleError.ExportFailed("encode"))
                         produced += out
                         onProgress(++done, total)
                     }
@@ -120,15 +145,17 @@ public class ExportRunner @Inject constructor(
         }
     }
 
-    private suspend fun writeImage(page: Page, out: File, request: ExportRequest): Boolean = withContext(dispatchers.io) {
+    private suspend fun writeImage(page: Page, out: File, request: ExportRequest, markupDir: File): Boolean = withContext(dispatchers.io) {
         coroutineContext.ensureActive()
         val q = request.quality
+        val maxEdge = q.maxLongEdge.takeIf { request.format == ExportFormat.JPEG }
+        val prepared = runCatching { compositor.prepare(page, request.watermark, maxEdge, markupDir) }.getOrNull() ?: return@withContext false
         if (request.format == ExportFormat.JPEG && q.maxLongEdge == null) {
-            // Original quality: the processed file already is the JPEG we want.
-            File(page.processedPath).copyTo(out, overwrite = true)
+            // Original quality: the processed (or composited) file already is the JPEG we want.
+            File(prepared.imagePath).copyTo(out, overwrite = true)
             return@withContext true
         }
-        val bitmap = bitmaps.decodeFile(page.processedPath, q.maxLongEdge.takeIf { request.format == ExportFormat.JPEG }) ?: return@withContext false
+        val bitmap = bitmaps.decodeFile(prepared.imagePath, maxEdge) ?: return@withContext false
         try {
             if (request.format == ExportFormat.PNG) bitmaps.writePng(bitmap, out.path)
             else bitmaps.writeJpeg(bitmap, out.path, q.jpegQuality ?: ORIGINAL_JPEG_QUALITY)
@@ -167,7 +194,11 @@ public class ExportRunner @Inject constructor(
         }
     }
 
-    private fun Page.toPdfInput() = PdfPageInput(processedPath, widthPx, heightPx, ocr.lines.orEmpty())
+    /** Burns markup and the watermark in (when there are any) and drops redacted text from the text layer. */
+    private fun Page.toPdfInput(request: ExportRequest, markupDir: File): PdfPageInput {
+        val prepared = compositor.prepare(this, request.watermark, null, markupDir)
+        return PdfPageInput(prepared.imagePath, widthPx, heightPx, prepared.lines)
+    }
 
     private data class Job(val documentId: String, val title: String, val pages: List<Page>)
 
@@ -185,5 +216,6 @@ public class ExportRunner @Inject constructor(
     private companion object {
         const val ORIGINAL_JPEG_QUALITY = 95
         const val PARTS = "parts"
+        const val MARKUP = ".markup"
     }
 }

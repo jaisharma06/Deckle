@@ -12,6 +12,10 @@ import com.avyaan.deckle.domain.ocr.OcrState
 import com.avyaan.deckle.domain.ocr.OcrStatus
 import com.avyaan.deckle.domain.page.DocumentText
 import com.avyaan.deckle.domain.page.Page
+import com.avyaan.deckle.domain.markup.PageMarkup
+import com.avyaan.deckle.domain.tag.Tag
+import com.avyaan.deckle.domain.tag.TagColor
+import com.avyaan.deckle.domain.tag.TagRepository
 import com.avyaan.deckle.domain.page.PageRepository
 import com.avyaan.deckle.domain.export.ExportDestination
 import com.avyaan.deckle.domain.export.ExportFormat
@@ -74,6 +78,14 @@ public class RoomDocumentRepository @Inject constructor(db: DeckleDatabase) : Do
     override suspend fun liveIdsIn(folderIds: Collection<String>): List<String> =
         folderIds.toList().chunked(SQL_CHUNK).flatMap { dao.liveIdsIn(it) }
 
+    override fun observeAllLive(): Flow<List<DocumentSummary>> = dao.allLive().map { rows -> rows.map { it.toDomain() } }
+    override suspend fun setPinned(ids: List<String>, pinned: Boolean): Unit =
+        ids.chunked(SQL_CHUNK).forEach { dao.setPinned(it, pinned) }
+    override suspend fun setExpiry(id: String, expiresAt: Instant?, notifiedDays: Int?): Unit =
+        dao.setExpiry(id, expiresAt?.toEpochMilli(), notifiedDays)
+    override suspend fun setExpiryNotified(id: String, days: Int): Unit = dao.setExpiryNotified(id, days)
+    override suspend fun withExpiry(): List<Document> = dao.withExpiry().map { it.toDomain() }
+
     private fun SortOrder.comparator(): Comparator<DocumentSummary> = when (this) {
         SortOrder.CREATED_DESC -> compareByDescending { it.createdAt }
         SortOrder.MODIFIED_DESC -> compareByDescending { it.modifiedAt }
@@ -93,13 +105,14 @@ public class RoomPageRepository @Inject constructor(db: DeckleDatabase) : PageRe
     override suspend fun insert(pages: List<Page>): Unit = dao.insert(pages.map { it.toEntity(plainText = null) })
 
     override suspend fun update(page: Page) {
-        // Preserve the stored plain text and name: they're owned by setOcr and rename, not by page edits
-        // (an edit that started before a rename must not write the old name back).
+        // Preserve the stored plain text, name and markup: they're owned by setOcr, rename and setMarkup, not
+        // by page edits (an edit that started before a rename or a signature must not write the old value back).
         val stored = dao.get(page.id)
-        dao.update(page.toEntity(stored?.ocrPlainText).copy(name = stored?.name))
+        dao.update(page.toEntity(stored?.ocrPlainText).copy(name = stored?.name, markupJson = stored?.markupJson))
     }
 
     override suspend fun rename(pageId: String, name: String?): Unit = dao.rename(pageId, name)
+    override suspend fun setMarkup(pageId: String, markup: PageMarkup?): Unit = dao.setMarkup(pageId, PageMarkup.encode(markup))
 
     override suspend fun updateOrder(pageId: String, orderIndex: Long): Unit = dao.updateOrder(pageId, orderIndex)
     override suspend fun updateOrders(orders: Map<String, Long>): Unit = orders.forEach { (id, i) -> dao.updateOrder(id, i) }
@@ -186,6 +199,30 @@ public class RoomFolderRepository @Inject constructor(private val db: DeckleData
             }
         }
     }
+
+    override suspend fun setPinned(ids: List<String>, pinned: Boolean): Unit = ids.chunked(SQL_CHUNK).forEach { dao.setPinned(it, pinned) }
+}
+
+/** NV-30. Links go away by themselves (ON DELETE CASCADE) when a document is purged or a tag deleted. */
+public class RoomTagRepository @Inject constructor(private val db: DeckleDatabase) : TagRepository {
+    private val dao = db.tags()
+
+    override fun observeAll(): Flow<List<Tag>> = dao.observeAll().map { rows -> rows.map { it.toDomain() } }
+    override suspend fun all(): List<Tag> = dao.all().map { it.toDomain() }
+    override suspend fun create(tag: Tag): Unit = dao.insert(tag.toEntity())
+    override suspend fun update(id: String, name: String, color: TagColor): Unit = dao.update(id, name, color.name)
+    override suspend fun delete(id: String): Unit = dao.delete(id)
+    override fun observeTagsOf(documentId: String): Flow<Set<String>> = dao.observeTagsOf(documentId).map { it.toSet() }
+
+    override suspend fun setTags(documentId: String, tagIds: Set<String>) {
+        db.withTransaction {
+            dao.clearTagsOf(documentId)
+            dao.link(tagIds.map { DocumentTagEntity(documentId, it) })
+        }
+    }
+
+    override suspend fun addTag(documentIds: List<String>, tagId: String): Unit =
+        dao.link(documentIds.map { DocumentTagEntity(it, tagId) })
 }
 
 /** Stays well under SQLite's bound-parameter limit for `IN (:ids)` lists. */

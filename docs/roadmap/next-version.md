@@ -108,9 +108,40 @@ Phases run in this order. Each phase starts only after the previous one is confi
 |---|---|---|
 | **1. Quick wins** | NV-01 multi-select in review · NV-02 duplicate page · NV-04 library filters (plus a page-count sort) · NV-05 capture sound and haptics settings · merge (already exists, quick check only) | Built, awaiting phone check |
 | **2. Smarter scanning** | NV-14 auto-capture improvements · NV-12 book mode · NV-11 ID card mode · NV-13 finger and shadow removal · NV-10 blur warning | Built; not yet on the phone (connection dropped). Book mode passes its device test; finger fix and blur threshold await a device re-run |
-| **3. Organize** | NV-30 tags (folders already exist) · NV-03 pin favourites · NV-31 smart collections · NV-32 expiry reminders | — |
-| **4. Editing and signing** | NV-40 sign · NV-41 annotate · NV-42 redact · NV-43 watermark · NV-44 fill a scanned form | — |
+| **3. Organize** | NV-30 tags (folders already exist) · NV-03 pin favourites · NV-31 smart collections · NV-32 expiry reminders | Built together with phase 4 (on request), awaiting phone check |
+| **4. Editing and signing** | NV-40 sign · NV-41 annotate · NV-42 redact · NV-43 watermark · NV-44 fill a scanned form | Built together with phase 3 (on request), awaiting phone check |
 | **5. Export and share** | NV-50 compress to a target size · NV-51 more page sizes and margins · password PDFs (already exist, quick check only) · NV-52 long image / share as images · NV-53 share presets | — |
+
+### How phases 3 and 4 were built (decisions to check)
+
+Phases 3 and 4 were built in one go at the user's request, without a separate design pass. Database schema v4
+holds both (pins, expiry dates, tags, page markup) behind one additive migration (`Migrations.V3_TO_V4`).
+
+**Organize**
+- **Pin (NV-03):** documents and folders, from a selection's ⋯ menu or a document's menu. Pinned items come first at
+  their level, keeping the chosen sort inside each group; search results are not reordered.
+- **Tags (NV-30):** any number per document, with an 8-colour palette; a new tag gets an unused colour. Names are
+  unique regardless of case, so typing "bills" reuses "Bills". Deleting a tag never deletes documents.
+- **Smart collections (NV-31):** Pinned, Expiring soon (within 90 days, or already expired; soonest first), This month
+  (scanned this calendar month) and Signed (any page carries a signature). Each tag also works as a collection. A
+  collection or tag lists matches from every folder and hides folders; "Has text" still narrows only the current level.
+- **Expiry reminders (NV-32):** a date per document; local notifications 90, 30 and 7 days before and on the day,
+  from a daily WorkManager job. Each reminder fires once. Setting a date doesn't fire the reminder for the period it
+  already falls in. Notification permission is asked when a date is first set, never at launch. Tapping a reminder
+  opens the document. Covers show a badge for 90 days before expiry, in red for the last 30.
+
+**Editing and signing**
+- **One markup layer per page** (pen, highlighter, text, signature, redaction) is stored as JSON next to the page. The
+  scanned image is never changed: marks are drawn over it in the viewer and burned into exported copies only.
+  Thumbnails don't show marks; a marked page gets a pen badge instead.
+- **Sign (NV-40):** draw once; up to 5 signatures are kept, each encrypted with an Android Keystore AES-GCM key.
+  A placed signature copies its ink into the page, so the page stays signed if the saved signature is deleted.
+- **Redact (NV-42):** exports paint the area solid black in the pixels themselves and drop every OCR line the box
+  touches from the PDF text layer. In-app search and "Copy text" still see the original text.
+- **Watermark (NV-43):** an export option (PDF and images), diagonal and semi-transparent.
+- **Fill a form (NV-44):** the Text tool; tap where to type.
+- **Known limits:** rotating or re-cropping a page after marking it doesn't move the marks with it. The editor has
+  no pinch-zoom on the page itself (pinch scales the selected signature or text).
 
 Sections 3 (text features), 7 (privacy and security) and 8 (platform polish) aren't scheduled yet. They come after
 phase 5 unless you move them up.

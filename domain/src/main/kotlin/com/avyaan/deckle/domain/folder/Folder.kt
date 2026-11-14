@@ -10,6 +10,8 @@ public data class Folder(
     val parentId: String?,
     val createdAt: Instant,
     val modifiedAt: Instant,
+    /** NV-03 (schema v4). */
+    val pinned: Boolean = false,
 )
 
 /** A folder as the library lists it: what it directly contains. */
@@ -34,6 +36,7 @@ public interface FolderRepository {
      * moved to the library root, so nothing can end up inside a folder that no longer exists.
      */
     public suspend fun delete(ids: List<String>)
+    public suspend fun setPinned(ids: List<String>, pinned: Boolean)
 }
 
 /** Pure helpers over the folder forest. */

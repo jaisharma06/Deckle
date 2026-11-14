@@ -213,6 +213,7 @@ fun ExportSheet(
                 }
             }
 
+            WatermarkSection(state, vm::onEvent)
             AnimatedVisibility(state.isPdf, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
                 PasswordSection(state, vm::onEvent)
             }
@@ -286,6 +287,30 @@ private fun <T> Segmented(options: List<T>, selected: T, label: (T) -> String, o
                 onClick = { onSelect(option) },
                 shape = SegmentedButtonDefaults.itemShape(i, options.size),
             ) { Text(label(option), maxLines = 1) }
+        }
+    }
+}
+
+/** NV-43: "Copy for bank KYC only" across every page. Only the exported copy carries it. */
+@Composable
+private fun WatermarkSection(state: ExportUiState, onEvent: (ExportEvent) -> Unit) {
+    Column {
+        Row(Modifier.fillMaxWidth().padding(vertical = Spacing.s), verticalAlignment = Alignment.CenterVertically) {
+            Icon(DeckleIcons.Watermark, null)
+            Spacer(Modifier.width(Spacing.m))
+            Text(stringResource(R.string.export_watermark), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+            Switch(checked = state.watermarkOn, onCheckedChange = { onEvent(ExportEvent.SetWatermarkOn(it)) }, enabled = !state.busy)
+        }
+        AnimatedVisibility(state.watermarkOn, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+            OutlinedTextField(
+                value = state.watermark,
+                onValueChange = { onEvent(ExportEvent.SetWatermark(it)) },
+                label = { Text(stringResource(R.string.export_watermark_field)) },
+                placeholder = { Text(stringResource(R.string.export_watermark_hint)) },
+                singleLine = true,
+                enabled = !state.busy,
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
     }
 }

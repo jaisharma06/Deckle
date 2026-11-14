@@ -28,19 +28,43 @@ public class ObserveLibraryUseCase @Inject constructor(
     private val documents: DocumentRepository,
     private val folders: FolderRepository,
     private val settings: SettingsRepository,
+    private val clock: com.avyaan.deckle.domain.common.Clock,
 ) {
-    public operator fun invoke(query: String, folderId: String?): Flow<LibraryListing> =
+    /**
+     * [filter] (NV-04/31): "Has text" narrows the current level; a smart collection or tag lists matching
+     * documents from every folder and hides folders. Pinned items come first at every level (NV-03),
+     * but not in search results, which stay ranked by the sort.
+     */
+    public operator fun invoke(query: String, folderId: String?, filter: LibraryFilter = LibraryFilter.NONE): Flow<LibraryListing> =
         settings.settings.flatMapLatest { s ->
-            val docs = if (query.isBlank()) documents.observeLibrary(s.sortOrder, folderId)
-            else documents.search(SearchQuery.toLike(query), SearchQuery.toFts(query), s.sortOrder)
+            val searching = query.isNotBlank()
+            val docs = when {
+                searching -> documents.search(SearchQuery.toLike(query), SearchQuery.toFts(query), s.sortOrder)
+                filter.libraryWide -> documents.observeAllLive()
+                else -> documents.observeLibrary(s.sortOrder, folderId)
+            }
             combine(docs, folders.observeAll(), folders.observeDocumentCounts()) { list, all, counts ->
-                val shown = if (query.isBlank()) all.filter { it.parentId == folderId }
-                else all.filter { it.name.contains(query.trim(), ignoreCase = true) }
+                val shown = when {
+                    searching -> all.filter { it.name.contains(query.trim(), ignoreCase = true) }
+                    filter.active -> emptyList()
+                    else -> all.filter { it.parentId == folderId }.sortedWith(s.sortOrder.folderComparator()).sortedByDescending { it.pinned }
+                }
+                val now = clock.now()
+                val zone = clock.zone()
+                val documentsShown = when {
+                    searching -> list
+                    filter.active -> {
+                        val matching = list.filter { SmartCollections.matches(it, filter, now, zone) }
+                        val sorted = if (filter.libraryWide) matching.sortedWith(SmartCollections.comparator(s.sortOrder)) else matching
+                        SmartCollections.order(SmartCollections.pinnedFirst(sorted), filter)
+                    }
+                    else -> SmartCollections.pinnedFirst(list)
+                }
                 LibraryListing(
-                    folders = shown.sortedWith(s.sortOrder.folderComparator()).map { f ->
+                    folders = (if (searching) shown.sortedWith(s.sortOrder.folderComparator()) else shown).map { f ->
                         FolderSummary(f, documentCount = counts[f.id] ?: 0, folderCount = all.count { it.parentId == f.id })
                     },
-                    documents = list,
+                    documents = documentsShown,
                     path = FolderTree.path(folderId, all),
                     allFolders = all,
                 )
@@ -178,5 +202,16 @@ public class MergeDocumentsUseCase @Inject constructor(
         }
         deletePermanently(documentIds)
         return Outcome.Success(newId)
+    }
+}
+
+/** NV-03. */
+public class PinUseCase @Inject constructor(
+    private val documents: DocumentRepository,
+    private val folders: FolderRepository,
+) {
+    public suspend operator fun invoke(documentIds: List<String>, folderIds: List<String>, pinned: Boolean) {
+        if (documentIds.isNotEmpty()) documents.setPinned(documentIds, pinned)
+        if (folderIds.isNotEmpty()) folders.setPinned(folderIds, pinned)
     }
 }

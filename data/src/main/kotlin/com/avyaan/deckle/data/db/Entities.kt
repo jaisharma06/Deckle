@@ -23,6 +23,11 @@ public data class DocumentEntity(
      * mean rebuilding the documents table in the migration. FolderRepository.delete detaches documents.
      */
     @ColumnInfo(defaultValue = "NULL") val folderId: String? = null,
+    /** NV-03 (schema v4). */
+    @ColumnInfo(defaultValue = "0") val pinned: Boolean = false,
+    /** NV-32 (schema v4): epoch millis of the expiry day's start; the last reminder stage sent. */
+    @ColumnInfo(defaultValue = "NULL") val expiresAt: Long? = null,
+    @ColumnInfo(defaultValue = "NULL") val expiryNotifiedDays: Int? = null,
 )
 
 /** Library folders (schema v3). `parentId` null = top level. */
@@ -33,7 +38,30 @@ public data class FolderEntity(
     val parentId: String?,
     val createdAt: Long,
     val modifiedAt: Long,
+    /** NV-03 (schema v4). */
+    @ColumnInfo(defaultValue = "0") val pinned: Boolean = false,
 )
+
+/** NV-30 (schema v4). [color] is a [com.avyaan.deckle.domain.tag.TagColor] name. */
+@Entity(tableName = "tags")
+public data class TagEntity(
+    @PrimaryKey val id: String,
+    val name: String,
+    val color: String,
+    val createdAt: Long,
+)
+
+/** Which tags a document carries. Rows go away with their document or tag. */
+@Entity(
+    tableName = "document_tags",
+    primaryKeys = ["documentId", "tagId"],
+    foreignKeys = [
+        ForeignKey(entity = DocumentEntity::class, parentColumns = ["id"], childColumns = ["documentId"], onDelete = ForeignKey.CASCADE),
+        ForeignKey(entity = TagEntity::class, parentColumns = ["id"], childColumns = ["tagId"], onDelete = ForeignKey.CASCADE),
+    ],
+    indices = [Index("tagId")],
+)
+public data class DocumentTagEntity(val documentId: String, val tagId: String)
 
 /** Live document count of one folder. */
 public data class FolderCountRow(val folderId: String, val count: Int)
@@ -77,6 +105,8 @@ public data class PageEntity(
     val ocrPlainText: String?,
     /** Optional user-given page name (schema v2). */
     @ColumnInfo(defaultValue = "NULL") val name: String? = null,
+    /** NV-40…44 (schema v4): [com.avyaan.deckle.domain.markup.PageMarkup] as JSON; null = no marks. */
+    @ColumnInfo(defaultValue = "NULL") val markupJson: String? = null,
 )
 
 /** FR-3 full-text index over OCR text. Room keeps it in sync with triggers. */
@@ -98,6 +128,11 @@ public data class DocumentSummaryRow(
     val snippet: String?,
     val matchRank: Int,
     val hasText: Boolean = false,
+    val pinned: Boolean = false,
+    val expiresAt: Long? = null,
+    /** Comma-separated tag ids (GROUP_CONCAT); null when untagged. */
+    val tagIds: String? = null,
+    val signed: Boolean = false,
 )
 
 /**

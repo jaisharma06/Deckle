@@ -238,6 +238,61 @@ object DeckleIcons {
     }
     val Info by lazy { outline("info") { circle(12f, 12f, 8.5f); moveTo(12f, 11f); lineTo(12f, 16f); circle(12f, 8f, 0.4f) } }
 
+    // ---- Phases 3 and 4 ----
+    val Pin by lazy {
+        outline("pin") {
+            moveTo(9f, 4f); lineTo(15f, 4f); moveTo(10f, 4f); lineTo(10f, 10f); lineTo(7f, 14f); lineTo(17f, 14f)
+            lineTo(14f, 10f); lineTo(14f, 4f); moveTo(12f, 14f); lineTo(12f, 20f)
+        }
+    }
+    val Tag by lazy {
+        outline("tag") {
+            moveTo(3.5f, 12.5f); lineTo(3.5f, 4.5f); lineTo(11.5f, 4.5f); lineTo(20f, 13f); lineTo(12.5f, 20.5f); close()
+            circle(8f, 9f, 1.2f)
+        }
+    }
+    val Calendar by lazy {
+        outline("calendar") {
+            moveTo(4f, 7f); lineTo(20f, 7f); lineTo(20f, 20f); lineTo(4f, 20f); close()
+            moveTo(4f, 11f); lineTo(20f, 11f); moveTo(8f, 4f); lineTo(8f, 8f); moveTo(16f, 4f); lineTo(16f, 8f)
+        }
+    }
+    val Pen by lazy {
+        outline("pen") { moveTo(4f, 20f); lineTo(5f, 15f); lineTo(16f, 4f); lineTo(20f, 8f); lineTo(9f, 19f); close(); moveTo(14f, 6f); lineTo(18f, 10f) }
+    }
+    val Highlighter by lazy {
+        outline("highlighter") {
+            moveTo(9f, 15f); lineTo(5f, 19f); lineTo(9f, 19f); lineTo(11f, 17f)
+            moveTo(8f, 14f); lineTo(16f, 4f); lineTo(20f, 8f); lineTo(10f, 16f); close()
+            moveTo(13f, 21f); lineTo(20f, 21f)
+        }
+    }
+    val TextTool by lazy { outline("text_tool") { moveTo(5f, 6f); lineTo(5f, 4f); lineTo(19f, 4f); lineTo(19f, 6f); moveTo(12f, 4f); lineTo(12f, 20f); moveTo(9f, 20f); lineTo(15f, 20f) } }
+    val Signature by lazy {
+        outline("signature") {
+            moveTo(3f, 15f); curveTo(6f, 6f, 9f, 5f, 9f, 9f); curveTo(9f, 13f, 6f, 17f, 7f, 17f)
+            curveTo(9f, 17f, 11f, 11f, 13f, 12f); curveTo(14.5f, 13f, 14f, 16f, 16f, 15f); lineTo(18f, 13.5f)
+            moveTo(3f, 20f); lineTo(21f, 20f)
+        }
+    }
+    val Redact by lazy {
+        outline("redact") {
+            moveTo(3f, 9f); lineTo(21f, 9f); lineTo(21f, 15f); lineTo(3f, 15f); close()
+            moveTo(6f, 9f); lineTo(12f, 15f); moveTo(11f, 9f); lineTo(17f, 15f); moveTo(16f, 9f); lineTo(21f, 14f)
+        }
+    }
+    val Select by lazy {
+        outline("select") { moveTo(6f, 4f); lineTo(6f, 19f); lineTo(10f, 15f); lineTo(13f, 21f); lineTo(15f, 20f); lineTo(12f, 14f); lineTo(18f, 14f); close() }
+    }
+    val Undo by lazy { outline("undo", autoMirror = true) { moveTo(9f, 14f); lineTo(4f, 9f); lineTo(9f, 4f); moveTo(4f, 9f); lineTo(14f, 9f); arcTo(5.5f, 5.5f, 0f, false, true, 14f, 20f); lineTo(11f, 20f) } }
+    val Redo by lazy { outline("redo", autoMirror = true) { moveTo(15f, 14f); lineTo(20f, 9f); lineTo(15f, 4f); moveTo(20f, 9f); lineTo(10f, 9f); arcTo(5.5f, 5.5f, 0f, false, false, 10f, 20f); lineTo(13f, 20f) } }
+    val Watermark by lazy {
+        outline("watermark") {
+            moveTo(5f, 3f); lineTo(15f, 3f); lineTo(19f, 7f); lineTo(19f, 21f); lineTo(5f, 21f); close()
+            moveTo(8f, 17f); lineTo(16f, 10f)
+        }
+    }
+
     private fun outline(name: String, autoMirror: Boolean = false, block: PathBuilder.() -> Unit): ImageVector =
         ImageVector.Builder(name = name, defaultWidth = 24.dp, defaultHeight = 24.dp, viewportWidth = 24f, viewportHeight = 24f, autoMirror = autoMirror)
             .path(

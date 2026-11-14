@@ -391,4 +391,99 @@
         <item quantity="one">Moved to Library</item>
         <item quantity="other">%d items moved to Library</item>
     </plurals>
+
+    <!-- Phase 3: organise (NV-03 pin, NV-30 tags, NV-31 smart collections, NV-32 expiry) -->
+    <string name="action_ok">OK</string>
+    <string name="library_pin">Pin to top</string>
+    <string name="library_unpin">Unpin</string>
+    <string name="library_tag">Add tag</string>
+    <string name="library_pinned">Pinned</string>
+    <string name="library_pinned_prefix">Pinned · %1$s</string>
+    <plurals name="library_pinned">
+        <item quantity="one">Pinned %1$d item</item>
+        <item quantity="other">Pinned %1$d items</item>
+    </plurals>
+    <plurals name="library_unpinned">
+        <item quantity="one">Unpinned %1$d item</item>
+        <item quantity="other">Unpinned %1$d items</item>
+    </plurals>
+    <plurals name="library_tagged">
+        <item quantity="one">Tagged %1$d document as %2$s</item>
+        <item quantity="other">Tagged %1$d documents as %2$s</item>
+    </plurals>
+    <string name="cd_pinned">Pinned</string>
+    <string name="collection_pinned">Pinned</string>
+    <string name="collection_expiring">Expiring soon</string>
+    <string name="collection_this_month">This month</string>
+    <string name="collection_signed">Signed</string>
+    <string name="library_no_matches">Nothing here yet</string>
+    <string name="library_no_matches_pinned">Pin a document or folder from its menu to keep it at the top.</string>
+    <string name="library_no_matches_expiring">Documents that expire in the next 90 days show up here. Set a date from a document\'s menu.</string>
+    <string name="library_no_matches_signed">Documents you sign in Deckle show up here.</string>
+    <string name="library_no_matches_month">Documents scanned this month show up here.</string>
+    <string name="library_no_matches_tag">Documents with this tag show up here, from every folder.</string>
+    <string name="tags_title">Tags</string>
+    <string name="tags_manage">Edit tags</string>
+    <string name="tags_manage_body">Deleting a tag only removes the label. Documents stay where they are.</string>
+    <string name="tags_empty">No tags yet. Type a name above to make one, such as Bills or IDs.</string>
+    <string name="tags_new_hint">New tag</string>
+    <string name="tags_add">Add tag</string>
+    <string name="tags_edit">Edit tag</string>
+    <string name="tags_delete">Delete tag</string>
+    <string name="tags_colour">Colour %1$d</string>
+    <string name="tags_name_taken">Another tag already has that name</string>
+    <string name="document_tags">Tags</string>
+    <string name="expiry_set_action">Set expiry date</string>
+    <string name="expiry_change">Change expiry date</string>
+    <string name="expiry_title">Expires on</string>
+    <string name="expiry_remove">Remove</string>
+    <string name="expiry_set">Expiry date saved. Deckle will remind you 90, 30 and 7 days before.</string>
+    <string name="expiry_cleared">Expiry date removed</string>
+    <string name="expiry_line_expired">Expired on %1$s</string>
+    <string name="expiry_line_today">Expires today (%1$s)</string>
+    <plurals name="expiry_line_days">
+        <item quantity="one">Expires %1$s · in %2$d day</item>
+        <item quantity="other">Expires %1$s · in %2$d days</item>
+    </plurals>
+    <string name="expiry_short_days">%1$d d</string>
+    <string name="expiry_short_today">Today</string>
+    <string name="expiry_short_expired">Expired</string>
+
+    <!-- Phase 4: editing and signing (NV-40…44) -->
+    <string name="page_markup">Mark up &amp; sign</string>
+    <string name="cd_page_marked">Has markup</string>
+    <string name="viewer_markup">Mark up</string>
+    <string name="markup_title">Mark up</string>
+    <string name="markup_undo">Undo</string>
+    <string name="markup_redo">Redo</string>
+    <string name="markup_discard_title">Discard changes?</string>
+    <string name="markup_discard_body">Your marks on this page won\'t be saved.</string>
+    <string name="markup_discard">Discard</string>
+    <string name="markup_edit_text">Edit text</string>
+    <string name="markup_text_add">Add text</string>
+    <string name="markup_text_hint">Type here</string>
+    <string name="markup_colour">Colour %1$d</string>
+    <string name="markup_pen">Pen</string>
+    <string name="markup_highlighter">Highlight</string>
+    <string name="markup_text">Text</string>
+    <string name="markup_sign">Sign</string>
+    <string name="markup_redact">Redact</string>
+    <string name="markup_select">Move</string>
+    <string name="markup_hint_pen">Draw with your finger.</string>
+    <string name="markup_hint_highlighter">Drag over text to highlight it.</string>
+    <string name="markup_hint_text">Tap where you want to type, such as a blank on a form. Tap text to change it.</string>
+    <string name="markup_hint_redact">Drag over what to hide. Exports black it out and drop its text.</string>
+    <string name="markup_hint_select">Tap a mark to select it. Drag to move; pinch to resize or turn.</string>
+    <string name="signature_title">Your signatures</string>
+    <string name="signature_private">Kept encrypted on this phone. Never uploaded.</string>
+    <string name="signature_use">Use this signature</string>
+    <string name="signature_delete">Delete signature</string>
+    <string name="signature_new">Draw a new signature</string>
+    <string name="signature_draw">Draw your signature</string>
+    <string name="signature_sign_here">Sign here</string>
+    <string name="signature_clear">Clear</string>
+    <string name="signature_save">Use signature</string>
+    <string name="export_watermark">Watermark</string>
+    <string name="export_watermark_field">Watermark text</string>
+    <string name="export_watermark_hint">Copy for bank KYC only</string>
 </resources>

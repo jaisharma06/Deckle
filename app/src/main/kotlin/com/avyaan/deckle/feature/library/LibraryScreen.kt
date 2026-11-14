@@ -98,6 +98,13 @@ import com.avyaan.deckle.designsystem.icons.DeckleIcons
 import com.avyaan.deckle.designsystem.theme.Spacing
 import com.avyaan.deckle.designsystem.theme.rememberHaptics
 import com.avyaan.deckle.domain.document.SortOrder
+import com.avyaan.deckle.domain.document.SmartCollection
+import com.avyaan.deckle.feature.tags.TagDot
+import com.avyaan.deckle.feature.tags.TagManagerSheet
+import com.avyaan.deckle.feature.tags.TagPickerSheet
+import com.avyaan.deckle.designsystem.components.expiryShort
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import com.avyaan.deckle.domain.export.ExportArchive
 import com.avyaan.deckle.domain.settings.LibraryLayout
 import com.avyaan.deckle.feature.export.ExportSheet
@@ -209,6 +216,8 @@ fun LibraryScreen(
     var newFolder by rememberSaveable { mutableStateOf(false) }
     var renamingFolder by rememberSaveable { mutableStateOf(false) }
     var moving by rememberSaveable { mutableStateOf(false) }
+    var tagging by rememberSaveable { mutableStateOf(false) }
+    var managingTags by rememberSaveable { mutableStateOf(false) }
 
     BackHandler(enabled = state.selecting) { onEvent(LibraryEvent.ClearSelection) }
     BackHandler(enabled = !state.selecting && state.query.isNotEmpty()) { onEvent(LibraryEvent.QueryChanged("")) }
@@ -232,6 +241,8 @@ fun LibraryScreen(
                         onMerge = { confirmMerge = true },
                         onExport = { onEvent(LibraryEvent.ExportSelected) },
                         onRename = { renamingFolder = true },
+                        onPin = { haptics.confirm(); onEvent(LibraryEvent.PinSelected(!state.selectionPinned)) },
+                        onTag = { tagging = true },
                         onDelete = {
                             haptics.confirm()
                             // Folders need a decision about their contents; documents alone just go to Trash (undoable).
@@ -297,7 +308,7 @@ fun LibraryScreen(
                 )
                 }
             } else {
-                LibraryGrid(state, onEvent, grid, haptics::select, onOpenCrumb, onNewFolder = { newFolder = true })
+                LibraryGrid(state, onEvent, grid, haptics::select, onOpenCrumb, onNewFolder = { newFolder = true }, onManageTags = { managingTags = true })
             }
         }
     }
@@ -342,6 +353,28 @@ fun LibraryScreen(
             )
         }
     }
+    if (tagging) {
+        if (state.selection.isEmpty()) {
+            tagging = false
+        } else {
+            TagPickerSheet(
+                tags = state.tags,
+                selected = null,
+                onPick = { tag -> tagging = false; onEvent(LibraryEvent.TagSelected(tag.id)) },
+                onCreate = { name -> tagging = false; onEvent(LibraryEvent.CreateTagForSelection(name)) },
+                onManage = { tagging = false; managingTags = true },
+                onDismiss = { tagging = false },
+            )
+        }
+    }
+    if (managingTags) {
+        TagManagerSheet(
+            tags = state.tags,
+            onEdit = { id, name, color -> onEvent(LibraryEvent.EditTag(id, name, color)) },
+            onDelete = { id -> onEvent(LibraryEvent.DeleteTag(id)) },
+            onDismiss = { managingTags = false },
+        )
+    }
     if (moving) {
         if (!state.selecting) {
             moving = false
@@ -366,6 +399,7 @@ private fun LibraryGrid(
     onSelectHaptic: () -> Unit,
     onOpenCrumb: (Int) -> Unit,
     onNewFolder: () -> Unit,
+    onManageTags: () -> Unit,
 ) {
     val context = LocalContext.current
     val tile = state.layout.tileSize()
@@ -391,15 +425,7 @@ private fun LibraryGrid(
                 SearchField(state.query, { onEvent(LibraryEvent.QueryChanged(it)) })
                 if (state.path.isNotEmpty() && state.query.isEmpty()) Breadcrumbs(state, onOpenCrumb, Modifier.padding(top = Spacing.s))
                 AnimatedVisibility(state.query.isEmpty() && !state.selecting, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
-                    Row(Modifier.padding(top = Spacing.m), horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
-                        SortChip(state.sort, { onEvent(LibraryEvent.SortChanged(it)) })
-                        FilterChip(
-                            selected = state.textOnly,
-                            onClick = { onEvent(LibraryEvent.TextOnlyChanged(!state.textOnly)) },
-                            label = { Text(stringResource(R.string.library_filter_has_text)) },
-                            leadingIcon = { Icon(if (state.textOnly) DeckleIcons.Check else DeckleIcons.Text, null, Modifier.size(18.dp)) },
-                        )
-                    }
+                    FilterRow(state, onEvent, onManageTags, Modifier.padding(top = Spacing.m))
                 }
             }
         }
@@ -417,6 +443,22 @@ private fun LibraryGrid(
                 EmptyState(
                     title = stringResource(R.string.library_no_results, content.query),
                     body = stringResource(R.string.library_no_results_body),
+                    illustration = {},
+                    modifier = Modifier.padding(top = Spacing.xxxl).animateItem(),
+                )
+            }
+            LibraryContent.NoMatches -> item(key = "nomatches", span = { GridItemSpan(maxLineSpan) }) {
+                EmptyState(
+                    title = stringResource(R.string.library_no_matches),
+                    body = stringResource(
+                        when (state.collection) {
+                            SmartCollection.PINNED -> R.string.library_no_matches_pinned
+                            SmartCollection.EXPIRING -> R.string.library_no_matches_expiring
+                            SmartCollection.SIGNED -> R.string.library_no_matches_signed
+                            SmartCollection.THIS_MONTH -> R.string.library_no_matches_month
+                            null -> R.string.library_no_matches_tag
+                        },
+                    ),
                     illustration = {},
                     modifier = Modifier.padding(top = Spacing.xxxl).animateItem(),
                 )
@@ -446,7 +488,7 @@ private fun LibraryGrid(
             }
             is LibraryContent.Items -> {
                 items(content.folders, key = { "f-${it.id}" }) { folder ->
-                    val subtitle = folder.subtitle()
+                    val subtitle = folder.subtitle().let { if (folder.pinned) stringResource(R.string.library_pinned_prefix, it) else it }
                     val selected = folder.id in state.folderSelection
                     val onClick = { onEvent(LibraryEvent.FolderClicked(folder.id)) }
                     val onLongClick = { onSelectHaptic(); onEvent(LibraryEvent.FolderLongPressed(folder.id)) }
@@ -468,9 +510,15 @@ private fun LibraryGrid(
                     val onClick = { onEvent(LibraryEvent.CardClicked(card.id)) }
                     val onLongClick = { onSelectHaptic(); onEvent(LibraryEvent.CardLongPressed(card.id)) }
                     val pages = pluralStringResource(R.plurals.page_count, card.pageCount, card.pageCount)
+                    // Rows have no cover badges: pin and expiry go into the subtitle.
+                    val marks = listOfNotNull(
+                        if (card.pinned) stringResource(R.string.library_pinned) else null,
+                        card.expiresInDays?.let { expiryShort(it) },
+                    ).joinToString(" · ")
+                    val rowSubtitle = listOf(marks, "$pages · $date").filter { it.isNotEmpty() }.joinToString(" · ")
                     when (state.layout) {
                         LibraryLayout.LIST -> LibraryRow(
-                            RowThumb.Cover(card.coverPath), card.title, "$pages · $date", selected, highlighted, onClick, onLongClick, Modifier.animateItem(),
+                            RowThumb.Cover(card.coverPath), card.title, rowSubtitle, selected, highlighted, onClick, onLongClick, Modifier.animateItem(),
                         )
                         LibraryLayout.DETAILS -> DetailsRow(
                             RowThumb.Cover(card.coverPath), card.title, pages, date, selected, highlighted, onClick, onLongClick, Modifier.animateItem(),
@@ -635,6 +683,8 @@ private fun SelectionTopBar(
     onExport: () -> Unit,
     onRename: () -> Unit,
     onDelete: () -> Unit,
+    onPin: () -> Unit,
+    onTag: () -> Unit,
 ) {
     var menu by remember { mutableStateOf(false) }
     val docs = state.selection.size
@@ -653,21 +703,29 @@ private fun SelectionTopBar(
             IconButton(onClick = onMove) { Icon(DeckleIcons.FolderMove, stringResource(R.string.library_move)) }
             IconButton(onClick = onExport, enabled = canExport) { Icon(DeckleIcons.Share, stringResource(R.string.library_export)) }
             IconButton(onClick = onDelete) { Icon(DeckleIcons.Delete, stringResource(R.string.action_delete)) }
-            if (canMerge || canRename) {
-                Box {
-                    IconButton(onClick = { menu = true }) { Icon(DeckleIcons.More, stringResource(R.string.action_more)) }
-                    DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                        if (canRename) DropdownMenuItem(
-                            text = { Text(stringResource(R.string.library_rename)) },
-                            leadingIcon = { Icon(DeckleIcons.Edit, null) },
-                            onClick = { menu = false; onRename() },
-                        )
-                        if (canMerge) DropdownMenuItem(
-                            text = { Text(stringResource(R.string.library_merge)) },
-                            leadingIcon = { Icon(DeckleIcons.Pages, null) },
-                            onClick = { menu = false; onMerge() },
-                        )
-                    }
+            Box {
+                IconButton(onClick = { menu = true }) { Icon(DeckleIcons.More, stringResource(R.string.action_more)) }
+                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(if (state.selectionPinned) R.string.library_unpin else R.string.library_pin)) },
+                        leadingIcon = { Icon(DeckleIcons.Pin, null) },
+                        onClick = { menu = false; onPin() },
+                    )
+                    if (docs > 0) DropdownMenuItem(
+                        text = { Text(stringResource(R.string.library_tag)) },
+                        leadingIcon = { Icon(DeckleIcons.Tag, null) },
+                        onClick = { menu = false; onTag() },
+                    )
+                    if (canRename) DropdownMenuItem(
+                        text = { Text(stringResource(R.string.library_rename)) },
+                        leadingIcon = { Icon(DeckleIcons.Edit, null) },
+                        onClick = { menu = false; onRename() },
+                    )
+                    if (canMerge) DropdownMenuItem(
+                        text = { Text(stringResource(R.string.library_merge)) },
+                        leadingIcon = { Icon(DeckleIcons.Pages, null) },
+                        onClick = { menu = false; onMerge() },
+                    )
                 }
             }
         },
@@ -731,6 +789,62 @@ private fun SortChip(sort: SortOrder, onSort: (SortOrder) -> Unit, modifier: Mod
             }
         }
     }
+}
+
+/**
+ * Sort, "Has text", the smart collections (NV-31) and one chip per tag (NV-30), in one sideways-scrolling row.
+ * A collection or tag shows matches from every folder.
+ */
+@Composable
+private fun FilterRow(state: LibraryUiState, onEvent: (LibraryEvent) -> Unit, onManageTags: () -> Unit, modifier: Modifier = Modifier) {
+    Row(
+        modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.s),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        SortChip(state.sort, { onEvent(LibraryEvent.SortChanged(it)) })
+        FilterChip(
+            selected = state.textOnly,
+            onClick = { onEvent(LibraryEvent.TextOnlyChanged(!state.textOnly)) },
+            label = { Text(stringResource(R.string.library_filter_has_text)) },
+            leadingIcon = { Icon(if (state.textOnly) DeckleIcons.Check else DeckleIcons.Text, null, Modifier.size(18.dp)) },
+        )
+        SmartCollection.entries.forEach { c ->
+            val on = state.collection == c
+            FilterChip(
+                selected = on,
+                onClick = { onEvent(LibraryEvent.CollectionChanged(if (on) null else c)) },
+                label = { Text(stringResource(c.label())) },
+                leadingIcon = { Icon(if (on) DeckleIcons.Check else c.icon(), null, Modifier.size(18.dp)) },
+            )
+        }
+        state.tags.forEach { tag ->
+            val on = state.tagFilter == tag.id
+            FilterChip(
+                selected = on,
+                onClick = { onEvent(LibraryEvent.TagFilterChanged(if (on) null else tag.id)) },
+                label = { Text(tag.name) },
+                leadingIcon = { if (on) Icon(DeckleIcons.Check, null, Modifier.size(18.dp)) else TagDot(tag.color) },
+            )
+        }
+        if (state.tags.isNotEmpty()) {
+            IconButton(onClick = onManageTags) { Icon(DeckleIcons.Edit, stringResource(R.string.tags_manage)) }
+        }
+    }
+}
+
+private fun SmartCollection.label(): Int = when (this) {
+    SmartCollection.PINNED -> R.string.collection_pinned
+    SmartCollection.EXPIRING -> R.string.collection_expiring
+    SmartCollection.THIS_MONTH -> R.string.collection_this_month
+    SmartCollection.SIGNED -> R.string.collection_signed
+}
+
+private fun SmartCollection.icon(): ImageVector = when (this) {
+    SmartCollection.PINNED -> DeckleIcons.Pin
+    SmartCollection.EXPIRING -> DeckleIcons.Calendar
+    SmartCollection.THIS_MONTH -> DeckleIcons.Clock
+    SmartCollection.SIGNED -> DeckleIcons.Signature
 }
 
 private fun SortOrder.label(): Int = when (this) {

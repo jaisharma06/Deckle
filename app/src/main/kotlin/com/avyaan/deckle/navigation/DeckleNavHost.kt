@@ -34,6 +34,8 @@ import com.avyaan.deckle.feature.review.ReviewRoute
 import com.avyaan.deckle.feature.settings.SettingsRoute
 import com.avyaan.deckle.feature.trash.TrashRoute
 import com.avyaan.deckle.feature.viewer.ViewerRoute
+import com.avyaan.deckle.feature.markup.MarkupRoute
+import androidx.compose.runtime.LaunchedEffect
 import com.avyaan.deckle.ui.LocalNavAnimatedScope
 import com.avyaan.deckle.ui.LocalSharedTransitionScope
 import androidx.compose.animation.AnimatedVisibilityScope
@@ -44,8 +46,19 @@ import androidx.compose.animation.AnimatedVisibilityScope
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
-fun DeckleNavHost(nav: NavHostController = rememberNavController()) {
+fun DeckleNavHost(
+    nav: NavHostController = rememberNavController(),
+    /** NV-32: a reminder was tapped; open that document once. */
+    openDocumentId: String? = null,
+    onDocumentOpened: () -> Unit = {},
+) {
     val reduced = LocalReducedMotion.current
+    LaunchedEffect(openDocumentId) {
+        val id = openDocumentId ?: return@LaunchedEffect
+        nav.popBackStack<LibraryDest>(inclusive = false)
+        nav.navigate(DocumentDest(id))
+        onDocumentOpened()
+    }
     SharedTransitionLayout {
         CompositionLocalProvider(LocalSharedTransitionScope provides this) {
             NavHost(
@@ -122,6 +135,7 @@ fun DeckleNavHost(nav: NavHostController = rememberNavController()) {
                             onOpenPage = { doc, page -> nav.navigate(ViewerDest(doc, page)) },
                             onAddPages = { doc, after -> nav.navigate(CaptureDest(targetDocumentId = doc, insertAfterPageId = after)) },
                             onRecrop = { pageId -> nav.navigate(RecropDest(pageId)) },
+                            onMarkup = { pageId -> nav.navigate(MarkupDest(pageId)) },
                         )
                     }
                 }
@@ -131,8 +145,12 @@ fun DeckleNavHost(nav: NavHostController = rememberNavController()) {
                             onBack = { nav.popBackStack() },
                             onRecrop = { pageId -> nav.navigate(RecropDest(pageId)) },
                             onInsertAfter = { doc, page -> nav.navigate(CaptureDest(targetDocumentId = doc, insertAfterPageId = page)) },
+                            onMarkup = { pageId -> nav.navigate(MarkupDest(pageId)) },
                         )
                     }
+                }
+                composable<MarkupDest>(enterTransition = { fadeIn(tween(DeckleMotion.MEDIUM)) }, popExitTransition = { fadeOut(tween(DeckleMotion.SHORT)) }) {
+                    Scoped { MarkupRoute(onClose = { nav.popBackStack() }) }
                 }
                 composable<TrashDest> { Scoped { TrashRoute(onBack = { nav.popBackStack() }) } }
                 composable<HistoryDest> {

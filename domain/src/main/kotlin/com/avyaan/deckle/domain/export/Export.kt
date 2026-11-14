@@ -44,6 +44,8 @@ public data class ExportRequest(
     val target: ExportTarget = ExportTarget.Share,
     /** When set, every produced file is packed into one ZIP (folder export). */
     val archive: ExportArchive? = null,
+    /** NV-43: text drawn diagonally across every exported page; null or blank = none. */
+    val watermark: String? = null,
 )
 
 /**

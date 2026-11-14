@@ -1,5 +1,21 @@
 package com.avyaan.deckle.feature.document
 
+import java.time.format.FormatStyle
+import java.time.format.DateTimeFormatter
+import java.time.LocalDate
+import com.avyaan.deckle.feature.tags.TagRow
+import com.avyaan.deckle.feature.tags.TagPickerSheet
+import com.avyaan.deckle.feature.tags.TagManagerSheet
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.rememberDatePickerState
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.DatePicker
+import androidx.core.content.ContextCompat
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.compose.rememberLauncherForActivityResult
+import android.os.Build
+import android.content.pm.PackageManager
+import android.Manifest
 import com.avyaan.deckle.designsystem.components.RenameDialog
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.foundation.layout.widthIn
@@ -125,6 +141,7 @@ fun DocumentRoute(
     onOpenPage: (documentId: String, pageId: String) -> Unit,
     onAddPages: (documentId: String, afterPageId: String?) -> Unit,
     onRecrop: (pageId: String) -> Unit,
+    onMarkup: (pageId: String) -> Unit,
     vm: DocumentViewModel = hiltViewModel(),
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
@@ -140,6 +157,11 @@ fun DocumentRoute(
     var failedSheetPage by rememberSaveable { mutableStateOf<String?>(null) }
     var renameShake by remember { mutableStateOf(0) }
     var renamingPage by rememberSaveable { mutableStateOf<String?>(null) }
+    var tagsOpen by rememberSaveable { mutableStateOf(false) }
+    var managingTags by rememberSaveable { mutableStateOf(false) }
+    var pickingExpiry by rememberSaveable { mutableStateOf(false) }
+    // NV-32: reminders need the notification permission on Android 13+. Asked when a date is set, never at launch.
+    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
     // Library → "Export" opens straight into the sheet, once.
     LaunchedEffect(Unit) { if (vm.consumeOpenExport()) exportOpen = true }
@@ -149,6 +171,7 @@ fun DocumentRoute(
             is DocumentEffect.OpenPage -> onOpenPage(effect.documentId, effect.pageId)
             is DocumentEffect.OpenCapture -> onAddPages(effect.documentId, effect.afterPageId)
             is DocumentEffect.OpenRecrop -> onRecrop(effect.pageId)
+            is DocumentEffect.OpenMarkup -> onMarkup(effect.pageId)
             is DocumentEffect.CopyToClipboard -> {
                 context.copySensitiveText(effect.text)
                 haptics.confirm()
@@ -183,7 +206,17 @@ fun DocumentRoute(
                     DeckleTopBar(
                         title = { EditableTitle(state.title, renameShake) { vm.onEvent(DocumentEvent.Rename(it)) } },
                         onBack = onBack,
-                        actions = { OverflowMenu(onSelect = { vm.onEvent(DocumentEvent.SetSelecting(true)) }, onDelete = { confirmDelete = true }) },
+                        actions = {
+                            OverflowMenu(
+                                pinned = state.pinned,
+                                hasExpiry = state.expiresOn != null,
+                                onSelect = { vm.onEvent(DocumentEvent.SetSelecting(true)) },
+                                onPin = { haptics.confirm(); vm.onEvent(DocumentEvent.TogglePin) },
+                                onTags = { tagsOpen = true },
+                                onExpiry = { pickingExpiry = true },
+                                onDelete = { confirmDelete = true },
+                            )
+                        },
                     )
                 }
             }
@@ -210,6 +243,7 @@ fun DocumentRoute(
                     modifier = Modifier.padding(horizontal = Spacing.l),
                 )
             }
+            DocumentMarks(state, onTags = { tagsOpen = true }, onExpiry = { pickingExpiry = true }, Modifier.padding(horizontal = Spacing.l, vertical = Spacing.xs))
             if (state.missing && !state.loading) {
                 EmptyState(stringResource(R.string.error_not_found), "", illustration = {}, modifier = Modifier.fillMaxSize())
             } else {
@@ -246,6 +280,37 @@ fun DocumentRoute(
                 onDismiss = { renamingPage = null },
             )
         }
+    }
+    if (tagsOpen) {
+        TagPickerSheet(
+            tags = state.allTags,
+            selected = state.tags.map { it.id }.toSet(),
+            onPick = { vm.onEvent(DocumentEvent.ToggleTag(it.id)) },
+            onCreate = { vm.onEvent(DocumentEvent.CreateTag(it)) },
+            onManage = { tagsOpen = false; managingTags = true },
+            onDismiss = { tagsOpen = false },
+        )
+    }
+    if (managingTags) {
+        TagManagerSheet(
+            tags = state.allTags,
+            onEdit = { id, name, color -> vm.onEvent(DocumentEvent.EditTag(id, name, color)) },
+            onDelete = { vm.onEvent(DocumentEvent.DeleteTag(it)) },
+            onDismiss = { managingTags = false },
+        )
+    }
+    if (pickingExpiry) {
+        ExpiryDialog(
+            current = state.expiresOn,
+            onPick = { date ->
+                pickingExpiry = false
+                if (date != null && Build.VERSION.SDK_INT >= 33 &&
+                    ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                ) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                vm.onEvent(DocumentEvent.SetExpiry(date))
+            },
+            onDismiss = { pickingExpiry = false },
+        )
     }
     if (confirmDelete) {
         ConfirmDialog(
@@ -309,6 +374,7 @@ private fun PageGrid(
                     onRename = { onRename(page.id) },
                     onExport = { onExport(page.id) },
                     onDuplicate = { vm.onEvent(DocumentEvent.DuplicatePage(page.id)) },
+                    onMarkup = { vm.onEvent(DocumentEvent.MarkupPage(page.id)) },
                     onFailedTapped = { onFailedTapped(page.id) },
                     modifier = Modifier
                         .graphicsLayer { scaleX = lift; scaleY = lift }
@@ -344,6 +410,7 @@ private fun PageTile(
     onRename: () -> Unit,
     onExport: () -> Unit,
     onDuplicate: () -> Unit,
+    onMarkup: () -> Unit,
     onFailedTapped: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -375,7 +442,17 @@ private fun PageTile(
             androidx.compose.animation.AnimatedVisibility(selected, enter = scaleIn(deckleSpring(DeckleMotion.Spring.Pop)) + fadeIn(), exit = scaleOut() + fadeOut(), modifier = Modifier.align(Alignment.Center)) {
                 SelectionCheck()
             }
+            if (page.marked) {
+                Icon(
+                    DeckleIcons.Pen,
+                    stringResource(R.string.cd_page_marked),
+                    tint = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier.align(Alignment.BottomStart).padding(Spacing.xs)
+                        .background(MaterialTheme.colorScheme.primary, CircleShape).padding(3.dp).size(12.dp),
+                )
+            }
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                DropdownMenuItem(text = { Text(stringResource(R.string.page_markup)) }, leadingIcon = { Icon(DeckleIcons.Signature, null) }, onClick = { menu = false; onMarkup() })
                 DropdownMenuItem(text = { Text(stringResource(R.string.page_crop)) }, leadingIcon = { Icon(DeckleIcons.Crop, null) }, onClick = { menu = false; onCrop() })
                 DropdownMenuItem(text = { Text(stringResource(R.string.page_rename)) }, leadingIcon = { Icon(DeckleIcons.Edit, null) }, onClick = { menu = false; onRename() })
                 DropdownMenuItem(text = { Text(stringResource(R.string.page_export)) }, leadingIcon = { Icon(DeckleIcons.Share, null) }, onClick = { menu = false; onExport() })
@@ -447,12 +524,27 @@ private fun EditableTitle(title: String, shakeKey: Int, onRename: (String) -> Un
 }
 
 @Composable
-private fun OverflowMenu(onSelect: () -> Unit, onDelete: () -> Unit) {
+private fun OverflowMenu(
+    pinned: Boolean,
+    hasExpiry: Boolean,
+    onSelect: () -> Unit,
+    onPin: () -> Unit,
+    onTags: () -> Unit,
+    onExpiry: () -> Unit,
+    onDelete: () -> Unit,
+) {
     var open by remember { mutableStateOf(false) }
     Box {
         IconButton(onClick = { open = true }) { Icon(DeckleIcons.More, stringResource(R.string.action_more)) }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             DropdownMenuItem(text = { Text(stringResource(R.string.document_select_pages)) }, leadingIcon = { Icon(DeckleIcons.Check, null) }, onClick = { open = false; onSelect() })
+            DropdownMenuItem(text = { Text(stringResource(if (pinned) R.string.library_unpin else R.string.library_pin)) }, leadingIcon = { Icon(DeckleIcons.Pin, null) }, onClick = { open = false; onPin() })
+            DropdownMenuItem(text = { Text(stringResource(R.string.document_tags)) }, leadingIcon = { Icon(DeckleIcons.Tag, null) }, onClick = { open = false; onTags() })
+            DropdownMenuItem(
+                text = { Text(stringResource(if (hasExpiry) R.string.expiry_change else R.string.expiry_set_action)) },
+                leadingIcon = { Icon(DeckleIcons.Calendar, null) },
+                onClick = { open = false; onExpiry() },
+            )
             DropdownMenuItem(text = { Text(stringResource(R.string.document_delete)) }, leadingIcon = { Icon(DeckleIcons.Delete, null) }, onClick = { open = false; onDelete() })
         }
     }
@@ -505,3 +597,57 @@ private fun BarAction(icon: androidx.compose.ui.graphics.vector.ImageVector, lab
 }
 
 private val BAR_BUTTON_MIN_WIDTH = 112.dp
+
+/** NV-30 / NV-32: the document's tags and expiry date under its title; tapping either edits it. */
+@Composable
+private fun DocumentMarks(state: DocumentUiState, onTags: () -> Unit, onExpiry: () -> Unit, modifier: Modifier = Modifier) {
+    val expires = state.expiresOn
+    if (state.tags.isEmpty() && expires == null) return
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+        if (state.tags.isNotEmpty()) TagRow(state.tags, Modifier.clickable(onClick = onTags))
+        if (expires != null) {
+            val days = java.time.temporal.ChronoUnit.DAYS.between(LocalDate.now(), expires)
+            val date = expires.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM))
+            val text = when {
+                days < 0 -> stringResource(R.string.expiry_line_expired, date)
+                days == 0L -> stringResource(R.string.expiry_line_today, date)
+                else -> pluralStringResource(R.plurals.expiry_line_days, days.toInt(), date, days.toInt())
+            }
+            Row(Modifier.clickable(onClick = onExpiry), verticalAlignment = Alignment.CenterVertically) {
+                Icon(DeckleIcons.Calendar, null, Modifier.size(16.dp), tint = if (days <= 30) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.size(Spacing.xs))
+                Text(text, style = MaterialTheme.typography.bodySmall, color = if (days <= 30) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
+}
+
+/** NV-32: Material date picker; "Remove" clears an existing date. Dates are whole days in the device's zone. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ExpiryDialog(current: LocalDate?, onPick: (LocalDate?) -> Unit, onDismiss: () -> Unit) {
+    val picker = rememberDatePickerState(
+        initialSelectedDateMillis = (current ?: LocalDate.now().plusYears(1)).atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli(),
+    )
+    DatePickerDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    picker.selectedDateMillis?.let { millis ->
+                        onPick(java.time.Instant.ofEpochMilli(millis).atZone(java.time.ZoneOffset.UTC).toLocalDate())
+                    }
+                },
+                enabled = picker.selectedDateMillis != null,
+            ) { Text(stringResource(R.string.action_save)) }
+        },
+        dismissButton = {
+            Row {
+                if (current != null) TextButton(onClick = { onPick(null) }) { Text(stringResource(R.string.expiry_remove)) }
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
+            }
+        },
+    ) {
+        DatePicker(state = picker, title = { Text(stringResource(R.string.expiry_title), Modifier.padding(start = Spacing.xl, top = Spacing.l)) })
+    }
+}

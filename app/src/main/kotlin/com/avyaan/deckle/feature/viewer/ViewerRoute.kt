@@ -65,6 +65,7 @@ import com.avyaan.deckle.designsystem.theme.LocalReducedMotion
 import com.avyaan.deckle.designsystem.theme.Spacing
 import com.avyaan.deckle.designsystem.theme.rememberHaptics
 import com.avyaan.deckle.feature.export.ExportSheet
+import com.avyaan.deckle.feature.markup.MarkedPage
 import com.avyaan.deckle.ui.ObserveEffects
 import com.avyaan.deckle.ui.SecureWindow
 import com.avyaan.deckle.ui.SharedKeys
@@ -78,6 +79,7 @@ fun ViewerRoute(
     onBack: () -> Unit,
     onRecrop: (pageId: String) -> Unit,
     onInsertAfter: (documentId: String, pageId: String) -> Unit,
+    onMarkup: (pageId: String) -> Unit,
     vm: ViewerViewModel = hiltViewModel(),
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
@@ -92,6 +94,7 @@ fun ViewerRoute(
     ObserveEffects(vm.effects) { effect ->
         when (effect) {
             is ViewerEffect.OpenRecrop -> onRecrop(effect.pageId)
+            is ViewerEffect.OpenMarkup -> onMarkup(effect.pageId)
             is ViewerEffect.OpenInsert -> onInsertAfter(effect.documentId, effect.afterPageId)
             is ViewerEffect.Message -> snackbar.showSnackbar(effect.text.resolve(context))
             ViewerEffect.Exit -> onBack()
@@ -134,6 +137,7 @@ fun ViewerRoute(
                         val current = state.current
                         ToolButton(DeckleIcons.Crop, R.string.review_crop) { vm.onEvent(ViewerEvent.Recrop) }
                         ToolButton(DeckleIcons.Filter, R.string.viewer_filter) { vm.onEvent(ViewerEvent.SetFilterOpen(true)) }
+                        ToolButton(DeckleIcons.Signature, R.string.viewer_markup, enabled = current != null) { vm.onEvent(ViewerEvent.Markup) }
                         ToolButton(DeckleIcons.RotateRight, R.string.review_rotate, enabled = state.busyPageId == null) { haptics.tick(); vm.onEvent(ViewerEvent.Rotate) }
                         ToolButton(DeckleIcons.Insert, R.string.viewer_insert) { vm.onEvent(ViewerEvent.InsertAfter) }
                         ToolButton(DeckleIcons.Delete, R.string.action_delete, enabled = current != null) { haptics.confirm(); vm.onEvent(ViewerEvent.Delete) }
@@ -199,14 +203,17 @@ private fun Pager(state: ViewerUiState, onEvent: (ViewerEvent) -> Unit) {
         LaunchedEffect(busy) { if (busy && !reduced) turn.animateTo(90f, tween(DeckleMotion.MEDIUM)) }
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Zoomable(Modifier.fillMaxSize(), onTap = { onEvent(ViewerEvent.ToggleChrome) }, onZoomChanged = { zoomed = it }) {
-                AsyncImage(
-                    model = File(page.imagePath),
+                // Fitted to the page so the markup overlay lines up with the image (NV-41).
+                MarkedPage(
+                    imagePath = page.imagePath,
+                    widthPx = page.widthPx,
+                    heightPx = page.heightPx,
+                    markup = page.markup,
                     contentDescription = stringResource(R.string.cd_page_number, index + 1),
-                    contentScale = ContentScale.Fit,
                     modifier = Modifier
                         .fillMaxSize()
-                        .sharedElement(SharedKeys.page(page.id))
                         .graphicsLayer { rotationZ = turn.value; val s = 1f - 0.25f * (turn.value / 90f); scaleX = s; scaleY = s },
+                    imageModifier = Modifier.sharedElement(SharedKeys.page(page.id)),
                 )
             }
             if (busy) CircularProgressIndicator(Modifier.size(32.dp), color = CameraColors.Ring)

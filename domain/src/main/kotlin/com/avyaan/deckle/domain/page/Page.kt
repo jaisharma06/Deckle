@@ -32,6 +32,8 @@ public data class Page(
     val heightPx: Int,
     val ocr: OcrState,
     val name: String? = null,
+    /** NV-40…44: marks drawn over the page; null = none. Owned by [PageRepository.setMarkup]. */
+    val markup: com.avyaan.deckle.domain.markup.PageMarkup? = null,
 )
 
 public enum class PageFileKind(public val folder: String) {
@@ -46,6 +48,8 @@ public interface PageRepository {
     public suspend fun update(page: Page)
     /** Null clears the name. */
     public suspend fun rename(pageId: String, name: String?)
+    /** Null clears the markup. [update] never touches it, so a page edit can't undo a saved signature. */
+    public suspend fun setMarkup(pageId: String, markup: com.avyaan.deckle.domain.markup.PageMarkup?)
     public suspend fun updateOrder(pageId: String, orderIndex: Long)
     public suspend fun updateOrders(orders: Map<String, Long>)
     public suspend fun moveToDocument(pageIds: List<String>, documentId: String)
