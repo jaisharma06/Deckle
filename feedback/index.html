@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Feedback: Deckle</title>
+  <meta name="description" content="Tell us what you think of Deckle, the offline document scanner.">
+  <link rel="icon" href="../icon.png">
+  <link rel="stylesheet" href="../style.css">
+  <style>
+    form { display: grid; gap: 22px; margin-top: 28px; }
+    fieldset { border: 0; margin: 0; padding: 0; }
+    legend, label { display: block; font-weight: 600; margin-bottom: 6px; }
+    .hint { font-weight: 400; color: var(--muted); font-size: 15px; }
+    input[type=text], input[type=email], textarea {
+      width: 100%; font: inherit; color: var(--ink); background: #fff;
+      padding: 10px 12px; border: 1px solid #d9d6cf; border-radius: 12px;
+    }
+    textarea { min-height: 150px; resize: vertical; }
+    input:focus, textarea:focus { outline: 2px solid var(--teal); outline-offset: 1px; border-color: var(--teal); }
+    .stars { display: flex; gap: 4px; flex-direction: row-reverse; justify-content: flex-end; }
+    .stars input, .kinds input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+    .stars label { font-size: 34px; line-height: 1; cursor: pointer; margin: 0; color: #d9d6cf; font-weight: 400; }
+    .stars input:checked ~ label, .stars label:hover, .stars label:hover ~ label { color: var(--ember); }
+    .stars input:focus-visible + label { outline: 2px solid var(--teal); border-radius: 4px; }
+    .kinds { display: flex; flex-wrap: wrap; gap: 8px; }
+    .kinds label { margin: 0; font-weight: 500; padding: 7px 16px; border-radius: 999px; cursor: pointer;
+      background: #fff; border: 1px solid #d9d6cf; }
+    .kinds input:checked + label { background: var(--teal); border-color: var(--teal); color: #fff; }
+    .kinds input:focus-visible + label { outline: 2px solid var(--teal); outline-offset: 2px; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    @media (max-width: 560px) { .row { grid-template-columns: 1fr; } }
+    .trap { position: absolute; left: -9999px; }
+    button { font: inherit; font-weight: 600; padding: 12px 26px; border-radius: 999px; border: 0; cursor: pointer;
+      background: var(--teal); color: #fff; justify-self: start; }
+    button:hover { background: var(--teal-deep); }
+    button[disabled] { opacity: .5; cursor: default; }
+    .count { text-align: right; font-size: 14px; color: var(--muted); margin-top: 4px; }
+    .status { margin: 0; padding: 12px 16px; border-radius: 12px; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    .status[hidden] { display: none; }
+  </style>
+</head>
+<body>
+  <main>
+    <a class="back" href="../">← Deckle</a>
+    <article>
+      <h1>Feedback</h1>
+      <p>Found a bug, missing a feature, or just like the app? Tell us here. Every message is read.</p>
+      <p class="hint">The Deckle app itself stays offline. This page is the only place that sends anything: what you type below, saved to our feedback database. Leave the email empty if you don't need a reply.</p>
+
+      <form id="feedback" novalidate>
+        <fieldset>
+          <legend>How do you like Deckle? <span class="hint">(optional)</span></legend>
+          <div class="stars" role="radiogroup" aria-label="Rating">
+            <input type="radio" id="r5" name="rating" value="5"><label for="r5" title="5 stars" aria-label="5 stars">★</label>
+            <input type="radio" id="r4" name="rating" value="4"><label for="r4" title="4 stars" aria-label="4 stars">★</label>
+            <input type="radio" id="r3" name="rating" value="3"><label for="r3" title="3 stars" aria-label="3 stars">★</label>
+            <input type="radio" id="r2" name="rating" value="2"><label for="r2" title="2 stars" aria-label="2 stars">★</label>
+            <input type="radio" id="r1" name="rating" value="1"><label for="r1" title="1 star" aria-label="1 star">★</label>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>What is it about?</legend>
+          <div class="kinds">
+            <input type="radio" id="k-bug" name="kind" value="bug"><label for="k-bug">Something's broken</label>
+            <input type="radio" id="k-idea" name="kind" value="idea" checked><label for="k-idea">An idea</label>
+            <input type="radio" id="k-praise" name="kind" value="praise"><label for="k-praise">Praise</label>
+            <input type="radio" id="k-other" name="kind" value="other"><label for="k-other">Other</label>
+          </div>
+        </fieldset>
+
+        <div>
+          <label for="message">Your feedback</label>
+          <textarea id="message" name="message" maxlength="2000" required
+            placeholder="What happened, or what would you like Deckle to do?"></textarea>
+          <div class="count"><span id="count">0</span> / 2000</div>
+        </div>
+
+        <div class="row">
+          <div>
+            <label for="version">App version <span class="hint">(optional)</span></label>
+            <input type="text" id="version" name="version" maxlength="20" placeholder="e.g. 1.0.2">
+          </div>
+          <div>
+            <label for="device">Phone model <span class="hint">(optional)</span></label>
+            <input type="text" id="device" name="device" maxlength="60" placeholder="e.g. OnePlus 11">
+          </div>
+        </div>
+
+        <div>
+          <label for="email">Email, if you'd like a reply <span class="hint">(optional, only used to answer you)</span></label>
+          <input type="email" id="email" name="email" maxlength="200" autocomplete="email">
+        </div>
+
+        <!-- Left empty by people; bots tend to fill it. -->
+        <div class="trap" aria-hidden="true">
+          <label for="website">Website</label>
+          <input type="text" id="website" name="website" tabindex="-1" autocomplete="off">
+        </div>
+
+        <button type="submit" id="send">Send feedback</button>
+        <p class="status" id="status" role="status" aria-live="polite" hidden></p>
+      </form>
+    </article>
+  </main>
+
+  <script type="module">
+    // Firebase web config. These values identify the project; they are not secrets. What the page may do is
+    // limited by the Firestore security rules (create only, validated; no reading back).
+    const firebaseConfig = {
+      apiKey: "AIzaSyA-e2SBnY1eI0509a0QAl_U6Q5NX25voWI",
+      authDomain: "deckle-feedback.firebaseapp.com",
+      projectId: "deckle-feedback",
+      appId: "1:145949460214:web:c2155c16f4d3c80fc28ed7",
+    };
+
+    const form = document.getElementById('feedback');
+    const statusEl = document.getElementById('status');
+    const send = document.getElementById('send');
+    const message = document.getElementById('message');
+    const count = document.getElementById('count');
+    message.addEventListener('input', () => { count.textContent = message.value.length; });
+
+    function show(text) { statusEl.textContent = text; statusEl.hidden = false; }
+
+    const configured = !firebaseConfig.apiKey.startsWith('REPLACE');
+    let db, addDoc, collection, serverTimestamp;
+    if (configured) {
+      try {
+        const app = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js');
+        const fs = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+        db = fs.getFirestore(app.initializeApp(firebaseConfig));
+        ({ addDoc, collection, serverTimestamp } = fs);
+      } catch (e) {
+        show('The feedback form could not load. Please check your connection and reload the page.');
+        send.disabled = true;
+      }
+    } else {
+      show('The feedback form is not connected yet. Please try again later.');
+      send.disabled = true;
+    }
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      if (!db) return;
+      const data = new FormData(form);
+      if ((data.get('website') || '').trim() !== '') { show('Thanks! Your feedback was sent.'); form.reset(); return; }
+      const text = (data.get('message') || '').trim();
+      if (text.length < 3) { show('Please write a few words first.'); message.focus(); return; }
+      const email = (data.get('email') || '').trim();
+      if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { show('That email address doesn’t look right. Fix it or leave it empty.'); return; }
+
+      const entry = {
+        kind: data.get('kind') || 'other',
+        message: text,
+        createdAt: serverTimestamp(),
+      };
+      const rating = Number(data.get('rating'));
+      if (rating >= 1 && rating <= 5) entry.rating = rating;
+      const version = (data.get('version') || '').trim();
+      if (version) entry.version = version;
+      const device = (data.get('device') || '').trim();
+      if (device) entry.device = device;
+      if (email) entry.email = email;
+
+      send.disabled = true;
+      show('Sending…');
+      try {
+        await addDoc(collection(db, 'feedback'), entry);
+        form.reset();
+        count.textContent = '0';
+        show('Thanks! Your feedback was sent.');
+      } catch (e) {
+        show('Sorry, that didn’t go through. Please try again in a moment.');
+      } finally {
+        send.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
