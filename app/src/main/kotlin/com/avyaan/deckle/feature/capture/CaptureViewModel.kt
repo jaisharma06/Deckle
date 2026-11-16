@@ -9,6 +9,7 @@ import com.avyaan.deckle.domain.geometry.AutoCaptureInput
 import com.avyaan.deckle.domain.geometry.AutoCaptureMachine
 import com.avyaan.deckle.domain.geometry.AutoCaptureState
 import com.avyaan.deckle.domain.geometry.Quad
+import com.avyaan.deckle.domain.geometry.QuadTracker
 import com.avyaan.deckle.domain.geometry.StabilityGate
 import com.avyaan.deckle.domain.imaging.ImageInput
 import com.avyaan.deckle.domain.imaging.PageDetector
@@ -119,6 +120,9 @@ class CaptureViewModel @Inject constructor(
     val effects: Flow<CaptureEffect> = effectChannel.receiveAsFlow()
 
     private val gate = StabilityGate()
+
+    /** Steadies the raw per-frame detection before it is drawn or judged stable. */
+    private val tracker = QuadTracker()
     private var searchingSinceMs = clock.millis()
     private var batchHintUntilMs = 0L
     private var quadAtShutter: Quad? = null
@@ -185,11 +189,12 @@ class CaptureViewModel @Inject constructor(
     private fun onDetection(result: DetectionResult) {
         val now = clock.millis()
         val aspect = if (result.uprightHeight == 0) 0.75f else result.uprightWidth.toFloat() / result.uprightHeight
-        val stable = gate.offer(result.quad, aspect)
+        val quad = tracker.offer(result.quad, aspect)
+        val stable = gate.offer(quad, aspect)
         val current = _state.value
         val next = AutoCaptureMachine.next(
             current.detection,
-            AutoCaptureInput.Detection(result.quad, stable, aspect),
+            AutoCaptureInput.Detection(quad, stable, aspect),
             now,
             autoCaptureEnabled = current.settings.autoCapture && current.detectorAvailable,
         )

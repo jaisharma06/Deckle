@@ -33,6 +33,21 @@ public object DetectionTuning {
     /** After an auto-capture, wait this long and for the page to change before arming again (UX addition). */
     public const val AUTO_CAPTURE_COOLDOWN_MS: Long = 1_000L   // NV-14: was 1.5 s; the page must still change
 
+    /** Live outline ([QuadTracker]): corner moves below this (≈3 px at 480 px) are detection noise. */
+    public const val TRACK_DEADBAND: Float = 0.006f
+
+    /** Live outline: share of the remaining distance covered per frame when following a small move. */
+    public const val TRACK_SMOOTHING: Float = 0.35f
+
+    /** Live outline: a move bigger than this is a different outline and must repeat before it shows. */
+    public const val TRACK_JUMP: Float = 0.06f
+
+    /** Live outline: frames a different outline must last before the overlay switches to it. */
+    public const val TRACK_CONFIRM_FRAMES: Int = 3
+
+    /** Live outline: frames without a page before the outline is dropped. */
+    public const val TRACK_HOLD_MISSING_FRAMES: Int = 4
+
     /** A corner moving this far (fraction of frame width) means "a new page". */
     public const val NEW_PAGE_MOVEMENT: Float = 0.10f
 

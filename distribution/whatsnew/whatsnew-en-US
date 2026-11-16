@@ -1,6 +1,8 @@
-What's new in 1.0.1
-• Export a single page: long-press it, or tap Share in the page viewer
-• Deleting every page of a document now removes the document
-• Fixed: deleted pages could come back after leaving the screen
-• Fixed: export buttons stayed off after exporting once
-• Clearer review toolbar, and smoother inline renaming
+• Sign, annotate, highlight and fill in forms on any page
+• Redact private details and add a watermark when you export
+• Tags, pins and smart collections: Pinned, Expiring soon, This month, Signed
+• Expiry reminders for IDs, policies and warranties
+• ID card mode, book mode and finger removal
+• Steadier page outline, blur warning and faster auto-capture
+• Select several pages in review, duplicate pages, more filters
+• Separate shutter sound and vibration settings
