@@ -122,6 +122,16 @@
     const count = document.getElementById('count');
     message.addEventListener('input', () => { count.textContent = message.value.length; });
 
+    // Opened from the app (About → Send feedback): it passes its version and the phone model in the link.
+    // Set as field values only, so nothing from the link becomes page markup.
+    const params = new URLSearchParams(location.search);
+    function prefill(id, value, max) {
+      const clean = (value || '').replace(/[\u0000-\u001f]/g, '').trim().slice(0, max);
+      if (clean) document.getElementById(id).value = clean;
+    }
+    prefill('version', params.get('v'), 20);
+    prefill('device', params.get('device'), 60);
+
     function show(text) { statusEl.textContent = text; statusEl.hidden = false; }
 
     const configured = !firebaseConfig.apiKey.startsWith('REPLACE');
@@ -169,6 +179,8 @@
       try {
         await addDoc(collection(db, 'feedback'), entry);
         form.reset();
+        prefill('version', params.get('v'), 20);
+        prefill('device', params.get('device'), 60);
         count.textContent = '0';
         show('Thanks! Your feedback was sent.');
       } catch (e) {
